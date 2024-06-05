@@ -1,6 +1,8 @@
 version: '3.8'
 
 services:
+
+  # Base de données Postgres avec pgvector
   db:
     build:
       context: .
@@ -18,6 +20,8 @@ services:
       - db-data:/var/lib/postgresql/data
     command: ["postgres", "-c", "shared_preload_libraries=vector"]
 
+
+# Service MiniO pour le stockage des fichiers
   minio:
     image: minio/minio:latest
     container_name: non-rel_bdd_container # Nom explicite pour le conteneur
@@ -31,13 +35,13 @@ services:
     volumes:
       - minio-data:/data
 
-
+# Service Keycloak pour la gestion de l'authentification
   keycloak:
     image: quay.io/keycloak/keycloak:latest
     container_name: auth_container # Nom explicite pour le conteneur
     environment:
-      KEYCLOAK_USER: admin
-      KEYCLOAK_PASSWORD: admin
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
       DB_VENDOR: h2
       DB_ADDR: localhost
       DB_DATABASE: keycloak
@@ -49,7 +53,7 @@ services:
     volumes:
       - keycloak-data:/opt/keycloak/data
 
-
+# Volumes persistence des données
 volumes:
   db-data:
     name: postgres_with_pgvector_volume # Nom explicite pour le volume
