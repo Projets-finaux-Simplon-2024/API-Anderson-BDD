@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  db:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: postgres_with_pgvector:1.0.0 # Nom explicite pour l'image avec version
+    container_name: rel_bdd_container # Nom explicite pour le conteneur
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: securepassword
+      POSTGRES_DB: anderson
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    command: ["postgres", "-c", "shared_preload_libraries=vector"]
+
+  minio:
+    image: minio/minio:latest
+    container_name: non-rel_bdd_container # Nom explicite pour le conteneur
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server --console-address ":9001" /data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    container_name: auth_container # Nom explicite pour le conteneur
+    environment:
+      KEYCLOAK_USER: admin
+      KEYCLOAK_PASSWORD: admin
+      DB_VENDOR: h2
+      DB_ADDR: localhost
+      DB_DATABASE: keycloak
+      DB_USER: keycloak
+      DB_PASSWORD: password
+    command: ["start-dev"] # Démarre Keycloak en mode développement
+    ports:
+      - "8080:8080"
+    volumes:
+      - keycloak-data:/opt/keycloak/data
+
+
+volumes:
+  db-data:
+    name: postgres_with_pgvector_volume # Nom explicite pour le volume
+  minio-data:
+    name: minio_volume # Nom explicite pour le volume
+  keycloak-data:
+    name: keycloak_volume # Nom explicite pour le volume
