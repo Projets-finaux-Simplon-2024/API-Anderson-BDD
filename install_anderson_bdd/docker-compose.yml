@@ -6,7 +6,7 @@ services:
   db:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.postgres
     image: postgres_with_pgvector:1.0.0 # Nom explicite pour l'image avec version
     container_name: rel_bdd_container # Nom explicite pour le conteneur
     environment:
