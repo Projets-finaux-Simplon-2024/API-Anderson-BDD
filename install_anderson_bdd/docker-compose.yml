@@ -11,7 +11,7 @@ services:
     container_name: rel_bdd_container # Nom explicite pour le conteneur
     environment:
       POSTGRES_USER: admin
-      POSTGRES_PASSWORD: securepassword
+      POSTGRES_PASSWORD: admin
       POSTGRES_DB: anderson
       PGDATA: /var/lib/postgresql/data/pgdata
     ports:
