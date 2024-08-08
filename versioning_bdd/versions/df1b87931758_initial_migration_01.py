@@ -73,6 +73,7 @@ def upgrade() -> None:
     sa.Column('minio_link', sa.String(length=100), nullable=False),
     sa.Column('date_de_creation', sa.Date(), nullable=True),
     sa.Column('created_at', sa.TIMESTAMP(), nullable=True),
+    sa.Column('posted_by', sa.String(length=30), nullable=True),
     sa.ForeignKeyConstraint(['collection_id'], ['collections.collection_id'], ),
     sa.PrimaryKeyConstraint('document_id')
     )

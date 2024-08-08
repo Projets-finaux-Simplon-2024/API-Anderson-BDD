@@ -64,6 +64,7 @@ class Document(Base):
     minio_link = Column(String(100), nullable=False)
     date_de_creation = Column(Date)
     created_at = Column(TIMESTAMP, default=datetime.utcnow)
+    posted_by = Column(String(30), nullable=False)
 
     collection = relationship("Collection", back_populates="documents")
     chunks = relationship("Chunk", back_populates="document")

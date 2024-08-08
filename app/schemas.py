@@ -42,6 +42,25 @@ class Role(BaseModel):
     class Config:
         orm_mode = True
 
+class CollectionBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+
+class CollectionCreate(CollectionBase):
+    pass
+
+class CollectionUpdate(CollectionBase):
+    pass
+
+class Collection(CollectionBase):
+    collection_id: int
+    user_id: int
+    date_de_creation: Optional[datetime]
+    created_at: Optional[datetime]
+
+    class Config:
+        orm_mode = True
+
 # ---- Classe liée au token
 class Token(BaseModel):
     user_id: int
