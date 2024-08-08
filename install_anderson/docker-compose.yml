@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  # Base de données Postgres avec pgvector
+  db:
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres
+    image: postgres_with_pgvector:1.0.0
+    container_name: rel_bdd_container
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: anderson
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    command: ["postgres", "-c", "shared_preload_libraries=vector"]
+
+  # Service MiniO pour le stockage des fichiers
+  minio:
+    image: minio/minio:latest
+    container_name: non-rel_bdd_container
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server --console-address ":9001" /data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+
+  # Service Keycloak pour la gestion de l'authentification
+  # keycloak:
+  #   image: quay.io/keycloak/keycloak:latest
+  #   container_name: auth_container
+  #   environment:
+  #     KEYCLOAK_ADMIN: admin
+  #     KEYCLOAK_ADMIN_PASSWORD: admin
+  #     DB_VENDOR: h2
+  #   command: ["start-dev"]
+  #   ports:
+  #     - "8080:8080"
+  #   volumes:
+  #     - keycloak-data:/opt/keycloak/data
+
+  # Service MLflow pour le suivi des modèles
+  mlflow:
+    image: bitnami/mlflow:latest
+    container_name: mlflow_container
+    environment:
+      MLFLOW_BACKEND_STORE_URI: "sqlite:///mlflow.db"
+      MLFLOW_DEFAULT_ARTIFACT_ROOT: "/app/mlartifacts"
+      MLFLOW_HOST: "0.0.0.0"
+      MLFLOW_PORT: 5000
+    ports:
+      - "5000:5000"
+    volumes:
+      - mlflow-data:/app
+    command: > 
+      /opt/bitnami/python/bin/mlflow server 
+      --backend-store-uri sqlite:///mlflow.db 
+      --default-artifact-root /app/mlartifacts 
+      --host 0.0.0.0 
+      --port 5000
+
+# Volumes persistence des données
+volumes:
+  db-data:
+    name: postgres_with_pgvector_volume
+  minio-data:
+    name: minio_volume
+  # keycloak-data:
+  #   name: keycloak_volume
+  mlflow-data:
+    name: mlflow_volume

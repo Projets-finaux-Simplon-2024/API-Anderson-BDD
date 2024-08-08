@@ -16,3 +16,12 @@ docker-compose -p bdd_anderson start
 docker-compose -p bdd_anderson stop
 
 
+
+
+
+
+
+utilisation de alembic
+alembic init alembic
+alembic revision --autogenerate -m "Updated models"
+alembic upgrade head
