@@ -29,5 +29,3 @@ htmlcov/
 
 # Ignore Jupyter Notebook checkpoints
 .ipynb_checkpoints/
-
-gen_cle_secu.py

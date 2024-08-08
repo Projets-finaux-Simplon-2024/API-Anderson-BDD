@@ -1,4 +1,10 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+from datetime import datetime, timezone
+from . import models, schemas, database
+from .auth import get_current_user, auth_router, check_permission, get_password_hash
+from typing import List
+from fastapi.templating import Jinja2Templates
 
 # Créer l'application FastAPI avec des métadonnées personnalisées
 app = FastAPI(
@@ -10,6 +16,111 @@ app = FastAPI(
     swagger_ui_parameters={"defaultModelsExpandDepth": -1}
 )
 
+# Monter le routeur d'authentification
+app.include_router(auth_router, prefix="/auth", tags=["Author"])
+
+# Configurer le répertoire des templates
+templates = Jinja2Templates(directory="templates")
+
+
+# ------------------------------------------------------ Endpoint pour créer un utilisateur ----------------------------------------------------|
+@app.post(
+        "/create_user",
+        response_model=schemas.User,
+        summary="Création d'un utilisateur",
+        description="Endpoint qui permet aux admins de créer un utilisateur",
+        tags=["Gestion des utilisateurs"]
+    )
+async def create_user(
+    user: schemas.UserCreate,
+    db: Session = Depends(database.get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    check_permission(current_user, "author_post_user")
+
+    # Vérifier si l'utilisateur existe déjà
+    existing_user = db.query(models.User).filter(models.User.username == user.username).first()
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username already registered"
+        )
+
+    # Hacher le mot de passe avant de le stocker
+    hashed_password = get_password_hash(user.password)
+
+    # Créer le nouvel utilisateur
+    new_user = models.User(
+        username=user.username,
+        passwords=hashed_password,
+        email=user.email,
+        role_id=user.role_id,
+        date_de_creation=datetime.now().date(),
+        created_at=datetime.now(timezone.utc)
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    return new_user
+
+# ----------------------------------------------------------------------------------------------------------------------------------------------|
+
+
+# ------------------------------------------------------ Endpoint pour consulter la liste des utilisateurs -------------------------------------|
+@app.get(
+        "/users",
+        response_model=List[schemas.User],
+        summary="Consulter la liste des utilisateurs",
+        description="Endpoint qui permet de consulter la liste des utilisateurs",
+        tags=["Gestion des utilisateurs"]
+    )
+async def get_users(
+    db: Session = Depends(database.get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    # Vérifier si l'utilisateur a les permissions nécessaires
+    check_permission(current_user, "author_get_user")
+
+    # Récupérer la liste des utilisateurs
+    users = db.query(models.User).all()
+    return users
+
+# ----------------------------------------------------------------------------------------------------------------------------------------------|
+
+# ------------------------------------------------------ Endpoint pour consulter un utilisateur par ID -----------------------------------------|
+@app.get(
+        "/users/{user_id}",
+        response_model=schemas.User,
+        summary="Consulter un utilisateur par ID",
+        description="Endpoint qui permet de consulter un utilisateur spécifique par son ID",
+        tags=["Gestion des utilisateurs"]
+    )
+async def get_user_by_id(
+    user_id: int,
+    db: Session = Depends(database.get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    # Vérifier si l'utilisateur a les permissions nécessaires
+    check_permission(current_user, "author_get_user")
+
+    # Récupérer l'utilisateur par ID
+    user = db.query(models.User).filter(models.User.user_id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    return user
+
+# ----------------------------------------------------------------------------------------------------------------------------------------------|
+
+# Exemple d'endpoint
 @app.get("/test")
 def read_root():
     return {"Hello": "World"}
+
+# Lancer le serveur avec Uvicorn
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="127.0.0.1", port=8000)
