@@ -1,3 +1,33 @@
-# Environnement
+# Ignore SQLite database files
+*.sqlite3
+*.db
 
-/env_api_anderson
+# Ignore Python cache files
+__pycache__/
+*.py[cod]
+**/__pycache__/
+
+# Ignore virtual environment directories
+env/
+venv/
+.env/
+env_api_anderson
+.env
+
+# Ignore other common files and directories
+.DS_Store
+.idea/
+.vscode/
+*.log
+*.bak
+*.swp
+
+# Ignore coverage reports
+htmlcov/
+.coverage
+.coverage.*
+
+# Ignore Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+gen_cle_secu.py
