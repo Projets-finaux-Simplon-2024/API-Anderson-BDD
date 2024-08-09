@@ -3,6 +3,7 @@ from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
 
+# ---- Gestion des utilisateurs ----------------------|
 class UserCreate(BaseModel):
     username: str
     password: str
@@ -41,7 +42,10 @@ class Role(BaseModel):
 
     class Config:
         orm_mode = True
+# ----------------------------------------------------|
 
+
+# ---- Gestions des collections ----------------------|
 class CollectionBase(BaseModel):
     name: str
     description: Optional[str] = None
@@ -56,12 +60,16 @@ class Collection(CollectionBase):
     collection_id: int
     user_id: int
     date_de_creation: Optional[datetime]
-    created_at: Optional[datetime]
+    derniere_modification: Optional[datetime]
+    etat_bucket: str
 
     class Config:
         orm_mode = True
+# ----------------------------------------------------|
 
-# ---- Classe liée au token
+
+
+# ---- Gestion des token -----------------------------|
 class Token(BaseModel):
     user_id: int
     username: str
@@ -71,3 +79,25 @@ class Token(BaseModel):
     algorithm: str
     role_id: int
     role: Role
+# ----------------------------------------------------|
+
+
+
+
+# ---- Gestion de l'upload ---------------------------|
+class DocumentCreate(BaseModel):
+    collection_id: int
+    collection_name: str
+    title: str
+
+class Document(DocumentCreate):
+    document_id: int
+    title_document: str
+    minio_link: str
+    date_de_creation: Optional[datetime]
+    created_at: Optional[datetime]
+    posted_by: str
+
+    class Config:
+        orm_mode = True
+# ----------------------------------------------------|

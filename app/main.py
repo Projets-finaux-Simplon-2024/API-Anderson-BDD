@@ -1,10 +1,34 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, File, UploadFile, Form
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 from . import models, schemas, database
 from .auth import get_current_user, auth_router, check_permission, get_password_hash
 from typing import List, Optional
 from fastapi.templating import Jinja2Templates
+from minio import Minio
+from minio.commonconfig import REPLACE, CopySource
+from dotenv import load_dotenv
+
+import os
+import io
+import re
+
+
+# Charger les variables d'environnement
+load_dotenv()
+
+MINIO_URL = os.getenv("MINIO_URL")
+MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY")
+MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY")
+
+# Initialiser le client Minio
+minio_client = Minio(
+    MINIO_URL,
+    access_key=MINIO_ACCESS_KEY,
+    secret_key=MINIO_SECRET_KEY,
+    secure=False
+)
+
 
 # Créer l'application FastAPI avec des métadonnées personnalisées
 app = FastAPI(
@@ -202,17 +226,45 @@ async def create_collection(
 ):
     check_permission(current_user, "author_post_collection")
 
-    # Créer la nouvelle collection
+    # Normaliser le nom de la collection pour les noms de buckets
+    normalized_name = collection.name.replace(" ", "-").replace("_", "-").lower()
+
+    # Vérifier si une collection avec le même nom existe déjà
+    existing_collection = db.query(models.Collection).filter(
+        models.Collection.name == normalized_name,
+        models.Collection.user_id == (current_user.user_id if isinstance(current_user, models.User) else current_user["user_id"])
+    ).first()
+    if existing_collection:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A collection with this name already exists."
+        )
+
+    # Créer la nouvelle collection dans la BDD
     new_collection = models.Collection(
-        name=collection.name,
+        name=normalized_name,
         description=collection.description,
         user_id=current_user.user_id if isinstance(current_user, models.User) else current_user["user_id"],  # Associe la collection à l'utilisateur actuel
         date_de_creation=datetime.now().date(),
-        created_at=datetime.now(timezone.utc)
+        derniere_modification=datetime.now(timezone.utc)
     )
     db.add(new_collection)
     db.commit()
     db.refresh(new_collection)
+
+    # Créer le bucket MinIO associé à la collection
+    bucket_name = f"collection-{new_collection.collection_id}-{normalized_name}" 
+    try:
+        if not minio_client.bucket_exists(bucket_name):
+            minio_client.make_bucket(bucket_name)
+            new_collection.etat_bucket = "créé"
+        else:
+            new_collection.etat_bucket = "existant"
+    except Exception as e:
+        new_collection.etat_bucket = f"non-créé: {str(e)}"
+
+    # Mettre à jour la collection dans la base de données avec l'état du bucket
+    db.commit()
 
     return new_collection
 # ----------------------------------------------------------------------------------------------------------------------------------------------|
@@ -235,7 +287,6 @@ async def get_collections(
     # Récupérer la liste des collections
     collections = db.query(models.Collection).all()
     return collections
-
 # ----------------------------------------------------------------------------------------------------------------------------------------------|
 
 # ------------------------------------------------------ Endpoint pour consulter une collection par ID -----------------------------------------|
@@ -290,9 +341,46 @@ async def update_collection(
             detail="Collection not found"
         )
 
+    # Conserver le nom original du bucket pour une éventuelle mise à jour
+    original_bucket_name = f"collection-{collection.collection_id}-{re.sub(r'[^a-zA-Z0-9\-]', '-', collection.name)}"
+
     # Mettre à jour les champs de la collection
+    old_name = collection.name
     collection.name = collection_update.name or collection.name
     collection.description = collection_update.description or collection.description
+
+    # Normaliser le nom du nouveau bucket
+    new_bucket_name = f"collection-{collection.collection_id}-{re.sub(r'[^a-zA-Z0-9\-]', '-', collection.name)}"
+
+    # Si le nom de la collection a changé, renommer le bucket dans MinIO
+    if collection_update.name and collection_update.name != old_name:
+        try:
+            # Créer le nouveau bucket s'il n'existe pas
+            if not minio_client.bucket_exists(new_bucket_name):
+                minio_client.make_bucket(new_bucket_name)
+
+            # Copier chaque objet du bucket original vers le nouveau
+            objects = minio_client.list_objects(original_bucket_name, recursive=True)
+            for obj in objects:
+                minio_client.copy_object(
+                    bucket_name=new_bucket_name,
+                    object_name=obj.object_name,
+                    source=CopySource(original_bucket_name, obj.object_name)
+                )
+
+            # Supprimer l'ancien bucket
+            objects = minio_client.list_objects(original_bucket_name, recursive=True)
+            for obj in objects:
+                minio_client.remove_object(original_bucket_name, obj.object_name)
+
+            minio_client.remove_bucket(original_bucket_name)
+
+            collection.etat_bucket = "mis à jour"
+        except Exception as e:
+            collection.etat_bucket = f"non-mis à jour: {str(e)}"
+
+    # Mettre à jour les dates de création pour refléter la dernière mise à jour
+    collection.derniere_modification = datetime.now(timezone.utc)
 
     db.commit()
     db.refresh(collection)
@@ -325,13 +413,96 @@ async def delete_collection(
             detail="Collection not found"
         )
 
-    # Supprimer la collection
+    # Nom du bucket MinIO associé à la collection
+    bucket_name = f"collection-{collection.collection_id}-{collection.name.replace(' ', '-').replace('_', '-')}"
+
+    # Vider le bucket dans MinIO
+    try:
+        objects = minio_client.list_objects(bucket_name, recursive=True)
+        for obj in objects:
+            minio_client.remove_object(bucket_name, obj.object_name)
+        minio_client.remove_bucket(bucket_name)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete bucket from MinIO: {str(e)}"
+        )
+
+    # Supprimer les documents associés et les chunks de la base de données
+    db.query(models.Document).filter(models.Document.collection_id == collection_id).delete(synchronize_session=False)
     db.delete(collection)
     db.commit()
 
-    return {"detail": "Collection deleted successfully"}
+    return {"detail": "Collection, associated documents, and MinIO bucket deleted successfully"}
 
 # ----------------------------------------------------------------------------------------------------------------------------------------------|
+
+# ------------------------------------------------------ Endpoint pour upload un document ------------------------------------------------------|
+@app.post(
+    "/upload_document",
+    response_model=schemas.Document,
+    summary="Uploader un document dans une collection",
+    description="Endpoint qui permet d'uploader un document dans une collection spécifique",
+    tags=["Gestion des documents"]
+)
+async def upload_document(
+    collection_id: int = Form(...),
+    collection_name: str = Form(...),
+    title: str = Form(...),
+    file: UploadFile = File(...),
+    db: Session = Depends(database.get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    check_permission(current_user, "author_post_collection")
+
+    # Normalisation du nom du document pour le stockage dans MinIO
+    title_document = file.filename.replace(" ", "-")
+
+    # Nom du bucket MinIO associé à la collection
+    bucket_name = f"collection-{collection_id}-{collection_name.replace(' ', '-').replace('_', '-')}"
+
+    # Stocker le fichier dans le bucket MinIO
+    try:
+        minio_client.put_object(
+            bucket_name=bucket_name,
+            object_name=title_document,
+            data=file.file,
+            length=-1,  # minio will automatically calculate the length
+            part_size=10*1024*1024  # 10 MB part size
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to upload file to MinIO: {str(e)}"
+        )
+
+    # Créer l'entrée du document dans la base de données
+    new_document = models.Document(
+        collection_id=collection_id,
+        title=title,
+        title_document=title_document,
+        minio_link=f"http://{MINIO_URL}/browser/{bucket_name}/{title_document}",
+        date_de_creation=datetime.now().date(),
+        created_at=datetime.now(timezone.utc),
+        posted_by=current_user.username if isinstance(current_user, models.User) else current_user["username"]
+    )
+    db.add(new_document)
+    db.commit()
+    db.refresh(new_document)
+
+    return {
+        "document_id": new_document.document_id,
+        "collection_id": new_document.collection_id,
+        "collection_name": collection_name,  # Ajout du nom de la collection à la réponse
+        "title": new_document.title,
+        "title_document": new_document.title_document,
+        "minio_link": new_document.minio_link,
+        "date_de_creation": new_document.date_de_creation,
+        "created_at": new_document.created_at,
+        "posted_by": new_document.posted_by
+    }
+# ----------------------------------------------------------------------------------------------------------------------------------------------|
+
 
 # Lancer le serveur avec Uvicorn
 if __name__ == "__main__":

@@ -61,7 +61,8 @@ def upgrade() -> None:
     sa.Column('name', sa.String(length=100), nullable=False),
     sa.Column('description', sa.Text(), nullable=True),
     sa.Column('date_de_creation', sa.Date(), nullable=True),
-    sa.Column('created_at', sa.TIMESTAMP(), nullable=True),
+    sa.Column('derniere_modification', sa.TIMESTAMP(), nullable=True),
+    sa.Column('etat_bucket', sa.String(length=300)),
     sa.ForeignKeyConstraint(['user_id'], ['users.user_id'], ),
     sa.PrimaryKeyConstraint('collection_id')
     )
@@ -70,7 +71,8 @@ def upgrade() -> None:
     sa.Column('document_id', sa.Integer(), nullable=False),
     sa.Column('collection_id', sa.Integer(), nullable=False),
     sa.Column('title', sa.String(length=100), nullable=False),
-    sa.Column('minio_link', sa.String(length=100), nullable=False),
+    sa.Column('title_document', sa.String(length=255), nullable=False),
+    sa.Column('minio_link', sa.String(length=255), nullable=False),
     sa.Column('date_de_creation', sa.Date(), nullable=True),
     sa.Column('created_at', sa.TIMESTAMP(), nullable=True),
     sa.Column('posted_by', sa.String(length=30), nullable=True),

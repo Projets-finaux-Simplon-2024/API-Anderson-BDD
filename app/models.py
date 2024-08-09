@@ -50,10 +50,11 @@ class Collection(Base):
     name = Column(String(100), nullable=False)
     description = Column(Text)
     date_de_creation = Column(Date)
-    created_at = Column(TIMESTAMP, default=datetime.utcnow)
+    derniere_modification = Column(TIMESTAMP, default=datetime.utcnow)
+    etat_bucket = Column(String(300))
 
     user = relationship("User", back_populates="collections")
-    documents = relationship("Document", back_populates="collection")
+    documents = relationship("Document", back_populates="collection", cascade="all, delete-orphan")
 
 class Document(Base):
     __tablename__ = "documents"
@@ -61,7 +62,8 @@ class Document(Base):
     document_id = Column(Integer, primary_key=True, index=True)
     collection_id = Column(Integer, ForeignKey("collections.collection_id"), nullable=False)
     title = Column(String(100), nullable=False)
-    minio_link = Column(String(100), nullable=False)
+    title_document = Column(String(255), nullable=False)
+    minio_link = Column(String(255), nullable=False)
     date_de_creation = Column(Date)
     created_at = Column(TIMESTAMP, default=datetime.utcnow)
     posted_by = Column(String(30), nullable=False)
