@@ -1,7 +1,8 @@
 # ------------------------------------------------------ Imports -------------------------------------------------------------------------------|
 from fastapi import FastAPI, Depends, HTTPException, status, File, UploadFile, Form
 from sqlalchemy.orm import Session
-from sqlalchemy import inspect
+from sqlalchemy import inspect, select
+from pgvector.sqlalchemy import Vector
 from subprocess import call
 from datetime import datetime, timezone
 from . import models, schemas, database
@@ -15,6 +16,8 @@ from io import BytesIO
 from PyPDF2 import PdfReader
 from transformers import AutoTokenizer, AutoModel
 from mlflow.tracking import MlflowClient
+from sklearn.metrics.pairwise import cosine_similarity
+
 
 import pandas as pd
 import numpy as np
@@ -868,6 +871,67 @@ async def delete_document(
     return {"detail": f"Document with id {document_id} and its chunks have been deleted successfully"}
 # ----------------------------------------------------------------------------------------------------------------------------------------------|
 
+
+
+
+# ------------------------------------------------------ Récupération du top n embedding -------------------------------------------------------|
+@app.post(
+    "/search",
+    response_model=schemas.SearchResponse,
+    summary="Recherche les chunks les plus proches d'une requête",
+    description="Endpoint pour rechercher les chunks les plus proches d'une requête basée sur l'embedding",
+    tags=["Recherche"]
+)
+async def search_similar_chunks(
+    query: str,
+    top_n: int = 5,
+    db: Session = Depends(database.get_db)
+):
+    # Calculer l'embedding de la requête
+    query_embedding = solon_model.predict([query])[0]
+
+    # Rechercher les chunks les plus proches dans la base de données
+    stmt = select(
+        models.Chunk.chunk_id,
+        models.Chunk.chunk_text,
+        models.Chunk.document_id,
+        models.Chunk.embedding_solon,
+        models.Chunk.embedding_solon.l2_distance(query_embedding).label("distance")
+    ).order_by("distance").limit(top_n)
+
+    similar_chunks = db.execute(stmt).fetchall()
+
+    # Calculer les similarités cosinus entre la requête et les embeddings des chunks
+    chunks_embeddings = [chunk.embedding_solon for chunk in similar_chunks]
+    cos_similarities = cosine_similarity([query_embedding], chunks_embeddings)
+
+    # Calculer la moyenne des similarités cosinus
+    mean_cos_similarity = np.mean(cos_similarities)
+
+    # Enregistrer les métriques dans MLflow
+    with mlflow.start_run(experiment_id=client.get_experiment_by_name("Solon-embeddings").experiment_id) as run:
+        mlflow.log_param("model_name", "OrdalieTech/Solon-embeddings-large-0.1")
+        mlflow.log_param("source", "Script de recherche dans main.py")
+        mlflow.log_param("model_version", f"solon-embeddings-large-model v{latest_version}")
+        mlflow.log_metric("mean_cos_similarity", mean_cos_similarity)
+        
+        # Enregistrer chaque similarité individuelle
+        for i, sim in enumerate(cos_similarities[0]):
+            mlflow.log_metric(f"cos_similarity_top_{i+1}", sim)
+
+    # Préparer la réponse
+    results = [
+        schemas.ChunkResult(
+            chunk_id=chunk.chunk_id,
+            document_id=chunk.document_id,
+            chunk_text=chunk.chunk_text,
+            distance=chunk.distance,
+        )
+        for chunk in similar_chunks
+    ]
+
+    return schemas.SearchResponse(results=results)
+# ----------------------------------------------------------------------------------------------------------------------------------------------|
 
 
 

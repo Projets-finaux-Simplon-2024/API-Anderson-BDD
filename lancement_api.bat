@@ -18,9 +18,6 @@ python -m pip install --upgrade pip
 :: Installer les dépendances
 python -m pip install -r requirements.txt
 
-:: Appliquer les migrations Alembic
-alembic upgrade head
-
 :: Lancer l'application
 uvicorn app.main:app --reload
 

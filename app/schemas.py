@@ -1,6 +1,6 @@
 # schemas.py
 from pydantic import BaseModel
-from typing import Optional
+from typing import List, Optional
 from datetime import datetime
 
 # ---- Gestion des utilisateurs ----------------------|
@@ -105,4 +105,19 @@ class Document(BaseModel):
 
     class Config:
         from_attributes = True
+# ----------------------------------------------------|
+
+
+# ---- Reponse top n chunk ---------------------------|
+class ChunkResult(BaseModel):
+    chunk_id: int
+    document_id: int
+    chunk_text: str
+    distance: float
+
+    class Config:
+        from_attributes = True
+
+class SearchResponse(BaseModel):
+    results: List[ChunkResult]
 # ----------------------------------------------------|
