@@ -19,7 +19,7 @@ class User(BaseModel):
     created_at: Optional[datetime]  
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class Role(BaseModel):
     role_id: int
@@ -41,7 +41,7 @@ class Role(BaseModel):
     author_delete_user: bool
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 # ----------------------------------------------------|
 
 
@@ -64,7 +64,7 @@ class Collection(CollectionBase):
     etat_bucket: str
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 # ----------------------------------------------------|
 
 
@@ -104,6 +104,5 @@ class Document(BaseModel):
     execution_time: Optional[str] = None
 
     class Config:
-        orm_mode = True
-
+        from_attributes = True
 # ----------------------------------------------------|

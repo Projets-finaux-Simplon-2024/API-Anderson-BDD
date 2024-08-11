@@ -1,5 +1,8 @@
+# ------------------------------------------------------ Imports -------------------------------------------------------------------------------|
 from fastapi import FastAPI, Depends, HTTPException, status, File, UploadFile, Form
 from sqlalchemy.orm import Session
+from sqlalchemy import inspect
+from subprocess import call
 from datetime import datetime, timezone
 from . import models, schemas, database
 from .auth import get_current_user, auth_router, check_permission, get_password_hash
@@ -22,9 +25,13 @@ import os
 import io
 import re
 import time
+# ----------------------------------------------------------------------------------------------------------------------------------------------|
 
 
 
+
+
+# ------------------------------------------------------ Initialisation ------------------------------------------------------------------------|
 # Charger les variables d'environnement
 load_dotenv()
 
@@ -42,12 +49,12 @@ model_name_solon = "solon-embeddings-large-model"
 client = MlflowClient()
 
 # Récupérer toutes les versions du modèle
-model_versions = client.get_latest_versions(model_name_solon, stages=["None", "Staging", "Production"])
+model_versions = client.get_latest_versions(model_name_solon)
 
 # Filtrer la dernière version du modèle en fonction de l'ordre de version
 latest_version = max([int(version.version) for version in model_versions])
 
-print(f"La dernière version du modèle {model_name_solon} est : {latest_version}")
+print(f"\nLa dernière version du modèle {model_name_solon} est : {latest_version}\n")
 
 solon_model_uri = f"models:/solon-embeddings-large-model/{latest_version}"
 solon_model = mlflow.pyfunc.load_model(solon_model_uri)
@@ -62,6 +69,32 @@ minio_client = Minio(
     secret_key=MINIO_SECRET_KEY,
     secure=False
 )
+# ----------------------------------------------------------------------------------------------------------------------------------------------|
+
+
+
+
+
+# ------------------------------------------------------ Migration des tables si nécessaire ----------------------------------------------------|
+# Vérifiez si les tables existent dans la base de données
+def check_tables_exist(engine):
+    inspector = inspect(engine)
+    # Liste des tables nécessaires
+    required_tables = ['documents', 'chunks', 'collections', 'users', 'roles']
+    existing_tables = inspector.get_table_names()
+    return all(table in existing_tables for table in required_tables)
+
+
+# Initialiser la base de données
+engine = database.engine
+
+# Vérifiez si les tables existent déjà
+if not check_tables_exist(engine):
+    print("\nTables non trouvées, exécution de la migration...\n")
+    call(["alembic", "upgrade", "head"])
+else:
+    print("\nLes tables existent déjà, migration non nécessaire.\n")
+# ----------------------------------------------------------------------------------------------------------------------------------------------|
 
 
 
@@ -458,7 +491,6 @@ async def update_collection(
     db.refresh(collection)
 
     return collection
-
 # ----------------------------------------------------------------------------------------------------------------------------------------------|
 
 
@@ -510,7 +542,6 @@ async def delete_collection(
     db.commit()
 
     return {"detail": "Collection, associated documents, and MinIO bucket deleted successfully"}
-
 # ----------------------------------------------------------------------------------------------------------------------------------------------|
 
 
@@ -576,7 +607,7 @@ async def upload_document(
 
     response = minio_client.get_object(bucket_name, title_document)
     file_extension = title_document.split(".")[-1].lower()
-    print (file_extension)
+    print(file_extension)
 
     reader = PdfReader(BytesIO(response.read()))
 
@@ -587,9 +618,9 @@ async def upload_document(
     # Diviser le texte en chunks de 500 mots
     chunks = cutting_text(text)
 
-    # Calcul du nombre de chunks après l'upload, si nécessaire
+    # Calcul du nombre de chunks après l'upload
     number_of_chunks = len(chunks)
-    print(number_of_chunks)
+    print(f"Nombre de chunks : {number_of_chunks}")
 
     # Créer l'entrée du document dans la base de données
     new_document = models.Document(
@@ -599,7 +630,8 @@ async def upload_document(
         minio_link=f"http://{MINIO_URL}/browser/{bucket_name}/{title_document}",
         date_de_creation=datetime.now().date(),
         created_at=datetime.now(timezone.utc),
-        posted_by=current_user.username if isinstance(current_user, models.User) else current_user["username"]
+        posted_by=current_user.username if isinstance(current_user, models.User) else current_user["username"],
+        num_of_chunks=number_of_chunks  # Enregistrer le nombre de chunks dans la base de données
     )
     db.add(new_document)
     db.commit()
@@ -639,6 +671,140 @@ async def upload_document(
         execution_time=f"{execution_time:.2f} secondes"
     )
 # ----------------------------------------------------------------------------------------------------------------------------------------------|
+
+
+
+
+
+# ------------------------------------------------------ Récupération de la liste des documents ------------------------------------------------|
+@app.get(
+    "/documents",
+    response_model=List[schemas.Document],
+    summary="Récupérer la liste de tous les documents",
+    description="Endpoint pour récupérer la liste de tous les documents disponibles.",
+    tags=["Gestion des documents"]
+)
+async def get_all_documents(
+    db: Session = Depends(database.get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    # Vérifier les permissions
+    check_permission(current_user, "author_get_doc")
+
+    # Récupérer tous les documents
+    documents = db.query(models.Document).all()
+
+    # Préparer la réponse
+    return [
+        schemas.Document(
+            document_id=document.document_id,
+            collection_id=document.collection_id,
+            collection_name=document.collection.name,  # Assurez-vous de récupérer le nom de la collection
+            title=document.title,
+            title_document=document.title_document,
+            minio_link=document.minio_link,
+            date_de_creation=document.date_de_creation,
+            created_at=document.created_at,
+            posted_by=document.posted_by,
+            number_of_chunks=document.num_of_chunks  # Utiliser directement le nombre de chunks stocké
+        )
+        for document in documents
+    ]
+# ----------------------------------------------------------------------------------------------------------------------------------------------|
+
+
+
+
+
+# ------------------------------------------------------ Récupération d'un document par son id -------------------------------------------------|
+@app.get(
+    "/documents/{document_id}",
+    response_model=schemas.Document,
+    summary="Récupérer un document par son ID",
+    description="Endpoint pour récupérer un document spécifique en utilisant son ID",
+    tags=["Gestion des documents"]
+)
+async def get_document_by_id(
+    document_id: int,
+    db: Session = Depends(database.get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    # Vérifier les permissions
+    check_permission(current_user, "author_get_doc")
+    
+    # Récupérer le document avec les informations nécessaires
+    document = db.query(models.Document).filter(models.Document.document_id == document_id).first()
+    
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Document with ID {document_id} not found."
+        )
+
+    # Préparer la réponse
+    return schemas.Document(
+        document_id=document.document_id,
+        collection_id=document.collection_id,
+        collection_name=document.collection.name,  # Assurez-vous de récupérer le nom de la collection
+        title=document.title,
+        title_document=document.title_document,
+        minio_link=document.minio_link,
+        date_de_creation=document.date_de_creation,
+        created_at=document.created_at,
+        posted_by=document.posted_by,
+        number_of_chunks=document.num_of_chunks  # Utiliser directement le nombre de chunks stocké
+    )
+# ----------------------------------------------------------------------------------------------------------------------------------------------|
+
+
+
+
+
+# ------------------------------------------------------ Récupération de la liste des documents d'une collection -------------------------------|
+@app.get(
+    "/collections/{collection_name}/documents",
+    response_model=List[schemas.Document],
+    summary="Récupérer la liste des documents d'une collection",
+    description="Endpoint pour récupérer la liste des documents dans une collection spécifique.",
+    tags=["Gestion des documents"]
+)
+async def get_documents_by_collection(
+    collection_name: str,
+    db: Session = Depends(database.get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    # Vérifier les permissions
+    check_permission(current_user, "author_get_doc")
+
+    # Récupérer la collection par nom
+    collection = db.query(models.Collection).filter(models.Collection.name == collection_name).first()
+
+    if not collection:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Collection with name '{collection_name}' not found."
+        )
+
+    # Récupérer tous les documents de cette collection
+    documents = db.query(models.Document).filter(models.Document.collection_id == collection.collection_id).all()
+
+    # Préparer la réponse
+    return [
+        schemas.Document(
+            document_id=document.document_id,
+            collection_id=document.collection_id,
+            collection_name=document.collection.name,
+            title=document.title,
+            title_document=document.title_document,
+            minio_link=document.minio_link,
+            date_de_creation=document.date_de_creation,
+            created_at=document.created_at,
+            posted_by=document.posted_by,
+            number_of_chunks=document.num_of_chunks
+        )
+        for document in documents
+    ]
+# -------------------------------------------------------------------------------------------- -------------------------------------------------|
 
 
 
@@ -701,45 +867,6 @@ async def delete_document(
 
     return {"detail": f"Document with id {document_id} and its chunks have been deleted successfully"}
 # ----------------------------------------------------------------------------------------------------------------------------------------------|
-
-
-
-
-
-# ------------------------------------------------------ Récupération d'un document par son id -------------------------------------------------|
-@app.get(
-    "/documents/{document_id}",
-    response_model=schemas.Document,
-    summary="Récupérer un document par son ID",
-    description="Endpoint pour récupérer un document spécifique en utilisant son ID",
-    tags=["Gestion des documents"]
-)
-async def get_document_by_id(document_id: int, db: Session = Depends(database.get_db)):
-    document = db.query(models.Document).filter(models.Document.document_id == document_id).first()
-    if not document:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Document with ID {document_id} not found."
-        )
-
-    # Calculer le nombre de chunks associés
-    number_of_chunks = db.query(models.Chunk).filter(models.Chunk.document_id == document_id).count()
-
-    # Préparer la réponse
-    return schemas.Document(
-        document_id=document.document_id,
-        collection_id=document.collection_id,
-        collection_name=document.collection.name,  # Assurez-vous de récupérer le nom de la collection
-        title=document.title,
-        title_document=document.title_document,
-        minio_link=document.minio_link,
-        date_de_creation=document.date_de_creation,
-        created_at=document.created_at,
-        posted_by=document.posted_by,
-        number_of_chunks=number_of_chunks
-    )
-# ----------------------------------------------------------------------------------------------------------------------------------------------|
-
 
 
 

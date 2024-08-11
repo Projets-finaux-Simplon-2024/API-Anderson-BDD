@@ -1,13 +1,9 @@
-from sqlalchemy import Column, Integer, String, Boolean, Text, TIMESTAMP, ForeignKey, Date, Index
+from sqlalchemy import Column, Integer, String, Boolean, Text, TIMESTAMP, ForeignKey, Date
 from sqlalchemy.orm import relationship
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.dialects.postgresql import ARRAY
-from sqlalchemy_utils import TSVectorType
 from .database import Base
 from datetime import datetime
 from pgvector.sqlalchemy import Vector
 
-Base = declarative_base()
 
 class User(Base):
     __tablename__ = "users"
@@ -72,9 +68,11 @@ class Document(Base):
     date_de_creation = Column(Date)
     created_at = Column(TIMESTAMP, default=datetime.utcnow)
     posted_by = Column(String(30), nullable=False)
+    num_of_chunks = Column(Integer, nullable=False, default=0)  # Nouvelle colonne ajoutée
 
     collection = relationship("Collection", back_populates="documents")
     chunks = relationship("Chunk", back_populates="document", cascade="all, delete-orphan")
+
 
 class Chunk(Base):
     __tablename__ = "chunks"
