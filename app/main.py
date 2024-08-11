@@ -14,6 +14,8 @@ from minio.commonconfig import REPLACE, CopySource
 from dotenv import load_dotenv
 from io import BytesIO
 from PyPDF2 import PdfReader
+from bs4 import BeautifulSoup
+from docx import Document as DocxDocument
 from transformers import AutoTokenizer, AutoModel
 from mlflow.tracking import MlflowClient
 from sklearn.metrics.pairwise import cosine_similarity
@@ -564,7 +566,7 @@ def cutting_text(text, max_length=500):
 @app.post(
     "/upload_document",
     response_model=schemas.Document,
-    summary="Uploader un document dans une collection",
+    summary="Uploader un document dans une collection (MAX 1Mo) extensions prises en charge : .pdf | .html | .txt | .docx",
     description="Endpoint qui permet d'uploader un document dans une collection spécifique",
     tags=["Gestion des documents"]
 )
@@ -586,20 +588,31 @@ async def upload_document(
 
     # Vérifier si un document avec le même title_document existe déjà dans la même collection
     existing_document = db.query(models.Document).filter_by(collection_id=collection_id, title_document=title_document).first()
-    if existing_document:
+    if (existing_document):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Document with title '{title_document}' already exists in collection '{collection_name}'."
         )
 
+    # Lire le contenu du fichier
+    file_content = await file.read()
+
+    # Vérifier si la taille du fichier dépasse 1 Mo
+    file_size = len(file_content)
+    max_size = 1 * 1024 * 1024  # 1 Mo en octets
+    if file_size > max_size:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="The uploaded file is too large. Maximum allowed size is 1 MB."
+        )
+
     # Stocker le fichier dans MinIO
     try:
-        file_content = await file.read()
         minio_client.put_object(
             bucket_name=bucket_name,
             object_name=title_document,
             data=BytesIO(file_content),
-            length=len(file_content),
+            length=file_size,
             part_size=10 * 1024 * 1024  # 10 MB part size
         )
     except Exception as e:
@@ -610,20 +623,40 @@ async def upload_document(
 
     response = minio_client.get_object(bucket_name, title_document)
     file_extension = title_document.split(".")[-1].lower()
-    print(file_extension)
-
-    reader = PdfReader(BytesIO(response.read()))
+    print("\n-----------------------------------------")
+    print(f"Extension du fichier upload : {file_extension}")
 
     text = ""
-    for page in reader.pages:
-        text += page.extract_text()
+    if file_extension == "pdf":
+        reader = PdfReader(BytesIO(response.read()))
+        for page in reader.pages:
+            text += page.extract_text()
+    elif file_extension == "txt":
+        # Lire le contenu du fichier .txt directement
+        text = response.read().decode('utf-8')
+    elif file_extension == "html":
+        # Lire le contenu du fichier .html et extraire le texte en utilisant BeautifulSoup
+        html_content = response.read().decode('utf-8')
+        soup = BeautifulSoup(html_content, 'html.parser')
+        text = soup.get_text(separator=' ')
+    elif file_extension == "docx":
+        # Lire le contenu du fichier .docx en utilisant python-docx
+        docx_content = BytesIO(response.read())
+        doc = DocxDocument(docx_content)
+        for paragraph in doc.paragraphs:
+            text += paragraph.text + ' '
+
 
     # Diviser le texte en chunks de 500 mots
     chunks = cutting_text(text)
 
     # Calcul du nombre de chunks après l'upload
     number_of_chunks = len(chunks)
+    estimated_time = number_of_chunks*2.5
+    print("-----------------------------------------")
     print(f"Nombre de chunks : {number_of_chunks}")
+    print(f"Temps estimé : {estimated_time} secondes")
+    print("-----------------------------------------")
 
     # Créer l'entrée du document dans la base de données
     new_document = models.Document(
@@ -657,8 +690,9 @@ async def upload_document(
 
     end_time = time.time()  # Fin du chronométrage
     execution_time = end_time - start_time
-
+    print("-----------------------------------------")
     print(f"Temps d'exécution : {execution_time:.2f} secondes")
+    print("-----------------------------------------\n")
 
     return schemas.Document(
         document_id=new_document.document_id,
