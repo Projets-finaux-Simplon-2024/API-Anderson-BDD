@@ -8,7 +8,15 @@ from fastapi.templating import Jinja2Templates
 from minio import Minio
 from minio.commonconfig import REPLACE, CopySource
 from dotenv import load_dotenv
+from io import BytesIO
+from PyPDF2 import PdfReader
+from transformers import AutoTokenizer, AutoModel
 
+import pandas as pd
+import numpy as np
+import torch
+import mlflow.pyfunc
+import mlflow
 import os
 import io
 import re
@@ -20,6 +28,14 @@ load_dotenv()
 MINIO_URL = os.getenv("MINIO_URL")
 MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY")
 MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY")
+
+# Charger le modèle Solon depuis MLflow
+mlflow.set_tracking_uri("http://localhost:5000")
+solon_model_uri = "models:/pytorch-solon-embeddings-large-model/1" # Remplacez par l'URI de votre modèle Solon avec sa version
+solon_model = mlflow.pyfunc.load_model(solon_model_uri)
+
+# Charger le tokenizer
+tokenizer = AutoTokenizer.from_pretrained("OrdalieTech/Solon-embeddings-large-0.1")
 
 # Initialiser le client Minio
 minio_client = Minio(
@@ -438,6 +454,23 @@ async def delete_collection(
 # ----------------------------------------------------------------------------------------------------------------------------------------------|
 
 # ------------------------------------------------------ Endpoint pour upload un document ------------------------------------------------------|
+# Fonction pour découper le texte en chunks de 500 mots
+def cutting_text(text, max_length=500):
+    words = text.split()
+    chunks = []
+    for i in range(0, len(words), max_length):
+        chunk = ' '.join(words[i:i + max_length])
+        chunks.append(chunk)
+    return chunks
+
+
+def extract_features(text):
+    inputs = tokenizer(text, return_tensors="pt", padding=True, truncation=True)
+    with torch.no_grad():
+        outputs = solon_model(**inputs)
+    return outputs.last_hidden_state.mean(dim=1).numpy()
+
+
 @app.post(
     "/upload_document",
     response_model=schemas.Document,
@@ -457,24 +490,42 @@ async def upload_document(
 
     # Normalisation du nom du document pour le stockage dans MinIO
     title_document = file.filename.replace(" ", "-")
-
-    # Nom du bucket MinIO associé à la collection
     bucket_name = f"collection-{collection_id}-{collection_name.replace(' ', '-').replace('_', '-')}"
 
-    # Stocker le fichier dans le bucket MinIO
+    # Stocker le fichier dans MinIO
     try:
+        file_content = await file.read()
         minio_client.put_object(
             bucket_name=bucket_name,
             object_name=title_document,
-            data=file.file,
-            length=-1,  # minio will automatically calculate the length
-            part_size=10*1024*1024  # 10 MB part size
+            data=BytesIO(file_content),
+            length=len(file_content),
+            part_size=10 * 1024 * 1024  # 10 MB part size
         )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to upload file to MinIO: {str(e)}"
         )
+
+    response = minio_client.get_object(bucket_name, title_document)
+    file_extension = title_document.split(".")[-1].lower()
+
+    print(file_extension)
+
+    reader = PdfReader(BytesIO(response.read()))
+    print(reader)
+
+    text = ""
+    for page in reader.pages:
+        text += page.extract_text()
+
+    # Diviser le texte en chunks de 500 mots
+    chunks = cutting_text(text)
+    print(type(chunks))
+
+    num_chunks = len(chunks)
+    print(num_chunks)
 
     # Créer l'entrée du document dans la base de données
     new_document = models.Document(
@@ -490,16 +541,20 @@ async def upload_document(
     db.commit()
     db.refresh(new_document)
 
+    features = extract_features(chunks)
+    print(features)
+
     return {
         "document_id": new_document.document_id,
         "collection_id": new_document.collection_id,
-        "collection_name": collection_name,  # Ajout du nom de la collection à la réponse
+        "collection_name": collection_name,
         "title": new_document.title,
         "title_document": new_document.title_document,
         "minio_link": new_document.minio_link,
         "date_de_creation": new_document.date_de_creation,
         "created_at": new_document.created_at,
-        "posted_by": new_document.posted_by
+        "posted_by": new_document.posted_by,
+        "number_of_chunks": num_chunks
     }
 # ----------------------------------------------------------------------------------------------------------------------------------------------|
 

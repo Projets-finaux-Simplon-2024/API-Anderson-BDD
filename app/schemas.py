@@ -97,6 +97,7 @@ class Document(DocumentCreate):
     date_de_creation: Optional[datetime]
     created_at: Optional[datetime]
     posted_by: str
+    number_of_chunks: Optional[int] = None
 
     class Config:
         orm_mode = True

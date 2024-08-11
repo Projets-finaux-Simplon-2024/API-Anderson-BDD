@@ -19,10 +19,10 @@ services:
       - db-data:/var/lib/postgresql/data
     command: ["postgres", "-c", "shared_preload_libraries=vector"]
 
-  # Service MiniO pour le stockage des fichiers
+  # Service MinIO pour le stockage des fichiers et des artefacts MLflow
   minio:
     image: minio/minio:latest
-    container_name: non-rel_bdd_container
+    container_name: minio_container
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
@@ -32,6 +32,41 @@ services:
       - "9001:9001"
     volumes:
       - minio-data:/data
+
+  # Service MLflow pour le suivi des modèles
+  mlflow:
+    image: bitnami/mlflow:latest
+    container_name: mlflow_container
+    environment:
+      MLFLOW_BACKEND_STORE_URI: "sqlite:///mlflow.db"
+      MLFLOW_DEFAULT_ARTIFACT_ROOT: "s3://mlflow/artifacts"
+      AWS_ACCESS_KEY_ID: "minioadmin"
+      AWS_SECRET_ACCESS_KEY: "minioadmin"
+      MLFLOW_S3_ENDPOINT_URL: "http://minio:9000"
+      MLFLOW_HOST: "0.0.0.0"
+      MLFLOW_PORT: 5000
+    ports:
+      - "5000:5000"
+    depends_on:
+      - minio
+    volumes:
+      - mlflow-data:/app
+    command: > 
+      /opt/bitnami/python/bin/mlflow server 
+      --backend-store-uri sqlite:///mlflow.db 
+      --default-artifact-root s3://mlflow/artifacts 
+      --host 0.0.0.0 
+      --port 5000
+
+# Volumes persistence des données
+volumes:
+  db-data:
+    name: postgres_with_pgvector_volume
+  minio-data:
+    name: minio_volume
+  mlflow-data:
+    name: mlflow_volume
+
 
   # Service Keycloak pour la gestion de l'authentification
   # keycloak:
@@ -48,32 +83,6 @@ services:
   #     - keycloak-data:/opt/keycloak/data
 
   # Service MLflow pour le suivi des modèles
-  mlflow:
-    image: bitnami/mlflow:latest
-    container_name: mlflow_container
-    environment:
-      MLFLOW_BACKEND_STORE_URI: "sqlite:///mlflow.db"
-      MLFLOW_DEFAULT_ARTIFACT_ROOT: "/app/mlartifacts"
-      MLFLOW_HOST: "0.0.0.0"
-      MLFLOW_PORT: 5000
-    ports:
-      - "5000:5000"
-    volumes:
-      - mlflow-data:/app
-    command: > 
-      /opt/bitnami/python/bin/mlflow server 
-      --backend-store-uri sqlite:///mlflow.db 
-      --default-artifact-root /app/mlartifacts 
-      --host 0.0.0.0 
-      --port 5000
 
-# Volumes persistence des données
-volumes:
-  db-data:
-    name: postgres_with_pgvector_volume
-  minio-data:
-    name: minio_volume
   # keycloak-data:
   #   name: keycloak_volume
-  mlflow-data:
-    name: mlflow_volume

@@ -69,7 +69,7 @@ class Document(Base):
     posted_by = Column(String(30), nullable=False)
 
     collection = relationship("Collection", back_populates="documents")
-    chunks = relationship("Chunk", back_populates="document")
+    chunks = relationship("Chunk", back_populates="document", cascade="all, delete-orphan")
 
 class Chunk(Base):
     __tablename__ = "chunks"

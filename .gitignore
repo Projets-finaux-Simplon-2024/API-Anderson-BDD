@@ -29,3 +29,5 @@ htmlcov/
 
 # Ignore Jupyter Notebook checkpoints
 .ipynb_checkpoints/
+
+/install_models/models
