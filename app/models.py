@@ -1,8 +1,13 @@
 from sqlalchemy import Column, Integer, String, Boolean, Text, TIMESTAMP, ForeignKey, Date, Index
 from sqlalchemy.orm import relationship
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy_utils import TSVectorType
 from .database import Base
 from datetime import datetime
+from pgvector.sqlalchemy import Vector
+
+Base = declarative_base()
 
 class User(Base):
     __tablename__ = "users"
@@ -78,15 +83,9 @@ class Chunk(Base):
     document_id = Column(Integer, ForeignKey("documents.document_id"), nullable=False)
     chunk_text = Column(Text, nullable=False)
     taille_chunk = Column(Integer, nullable=False)
-    embedding_cohere = Column(TSVectorType)
-    embedding_solon = Column(TSVectorType)
-    embedding_bge = Column(TSVectorType)
+    embedding_cohere = Column(Vector(dim=1024), nullable=True)
+    embedding_solon = Column(Vector(dim=1024), nullable=True)
+    embedding_bge = Column(Vector(dim=1024), nullable=True)
     created_at = Column(TIMESTAMP, default=datetime.utcnow)
 
     document = relationship("Document", back_populates="chunks")
-
-    __table_args__ = (
-        Index("embedding_cohere_index", "document_id", "embedding_cohere"),
-        Index("embedding_solon_index", "document_id", "embedding_solon"),
-        Index("embedding_bge_index", "document_id", "embedding_bge"),
-    )

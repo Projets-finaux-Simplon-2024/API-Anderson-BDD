@@ -90,15 +90,20 @@ class DocumentCreate(BaseModel):
     collection_name: str
     title: str
 
-class Document(DocumentCreate):
+class Document(BaseModel):
     document_id: int
+    collection_id: int
+    collection_name: str
+    title: str
     title_document: str
     minio_link: str
     date_de_creation: Optional[datetime]
     created_at: Optional[datetime]
     posted_by: str
     number_of_chunks: Optional[int] = None
+    execution_time: Optional[str] = None
 
     class Config:
         orm_mode = True
+
 # ----------------------------------------------------|

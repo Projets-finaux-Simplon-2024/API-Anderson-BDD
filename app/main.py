@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 from io import BytesIO
 from PyPDF2 import PdfReader
 from transformers import AutoTokenizer, AutoModel
+from mlflow.tracking import MlflowClient
 
 import pandas as pd
 import numpy as np
@@ -20,6 +21,8 @@ import mlflow
 import os
 import io
 import re
+import time
+
 
 
 # Charger les variables d'environnement
@@ -31,7 +34,22 @@ MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY")
 
 # Charger le modèle Solon depuis MLflow
 mlflow.set_tracking_uri("http://localhost:5000")
-solon_model_uri = "models:/pytorch-solon-embeddings-large-model/1" # Remplacez par l'URI de votre modèle Solon avec sa version
+
+# Nom du modèle enregistré
+model_name_solon = "solon-embeddings-large-model"
+
+# Créer une instance de MlflowClient
+client = MlflowClient()
+
+# Récupérer toutes les versions du modèle
+model_versions = client.get_latest_versions(model_name_solon, stages=["None", "Staging", "Production"])
+
+# Filtrer la dernière version du modèle en fonction de l'ordre de version
+latest_version = max([int(version.version) for version in model_versions])
+
+print(f"La dernière version du modèle {model_name_solon} est : {latest_version}")
+
+solon_model_uri = f"models:/solon-embeddings-large-model/{latest_version}"
 solon_model = mlflow.pyfunc.load_model(solon_model_uri)
 
 # Charger le tokenizer
@@ -46,7 +64,10 @@ minio_client = Minio(
 )
 
 
-# Créer l'application FastAPI avec des métadonnées personnalisées
+
+
+
+# ------------------------------------------------------ Créer l'application FastAPI avec des métadonnées personnalisées -----------------------|
 app = FastAPI(
     docs_url="/",
     redoc_url="/docs",
@@ -61,6 +82,10 @@ app.include_router(auth_router, prefix="/auth", tags=["Author"])
 
 # Configurer le répertoire des templates
 templates = Jinja2Templates(directory="templates")
+# ----------------------------------------------------------------------------------------------------------------------------------------------|
+
+
+
 
 
 # ------------------------------------------------------ Endpoint pour créer un utilisateur ----------------------------------------------------|
@@ -107,6 +132,9 @@ async def create_user(
 # ----------------------------------------------------------------------------------------------------------------------------------------------|
 
 
+
+
+
 # ------------------------------------------------------ Endpoint pour consulter la liste des utilisateurs -------------------------------------|
 @app.get(
     "/users",
@@ -127,6 +155,10 @@ async def get_users(
     return users
 
 # ----------------------------------------------------------------------------------------------------------------------------------------------|
+
+
+
+
 
 # ------------------------------------------------------ Endpoint pour consulter un utilisateur par ID -----------------------------------------|
 @app.get(
@@ -154,6 +186,10 @@ async def get_user_by_id(
     return user
 
 # ----------------------------------------------------------------------------------------------------------------------------------------------|
+
+
+
+
 
 # ------------------------------------------------------ Endpoint pour mettre à jour un utilisateur --------------------------------------------|
 @app.patch(
@@ -195,6 +231,10 @@ async def update_user(
 
 # ----------------------------------------------------------------------------------------------------------------------------------------------|
 
+
+
+
+
 # ------------------------------------------------------ Endpoint pour supprimer un utilisateur ------------------------------------------------|
 @app.delete(
     "/users/{user_id}",
@@ -226,6 +266,10 @@ async def delete_user(
     return {"detail": "User deleted successfully"}
 
 # ----------------------------------------------------------------------------------------------------------------------------------------------|
+
+
+
+
 
 # ------------------------------------------------------ Endpoint pour créer une collection ---------------------------------------------------|
 @app.post(
@@ -285,6 +329,10 @@ async def create_collection(
     return new_collection
 # ----------------------------------------------------------------------------------------------------------------------------------------------|
 
+
+
+
+
 # ------------------------------------------------------ Endpoint pour consulter la liste des collections --------------------------------------|
 @app.get(
     "/collections",
@@ -304,6 +352,10 @@ async def get_collections(
     collections = db.query(models.Collection).all()
     return collections
 # ----------------------------------------------------------------------------------------------------------------------------------------------|
+
+
+
+
 
 # ------------------------------------------------------ Endpoint pour consulter une collection par ID -----------------------------------------|
 @app.get(
@@ -331,6 +383,10 @@ async def get_collection_by_id(
     return collection
 
 # ----------------------------------------------------------------------------------------------------------------------------------------------|
+
+
+
+
 
 # ------------------------------------------------------ Endpoint pour mettre à jour une collection --------------------------------------------|
 @app.patch(
@@ -405,6 +461,10 @@ async def update_collection(
 
 # ----------------------------------------------------------------------------------------------------------------------------------------------|
 
+
+
+
+
 # ------------------------------------------------------ Endpoint pour supprimer une collection ------------------------------------------------|
 @app.delete(
     "/collections/{collection_id}",
@@ -453,6 +513,10 @@ async def delete_collection(
 
 # ----------------------------------------------------------------------------------------------------------------------------------------------|
 
+
+
+
+
 # ------------------------------------------------------ Endpoint pour upload un document ------------------------------------------------------|
 # Fonction pour découper le texte en chunks de 500 mots
 def cutting_text(text, max_length=500):
@@ -462,14 +526,6 @@ def cutting_text(text, max_length=500):
         chunk = ' '.join(words[i:i + max_length])
         chunks.append(chunk)
     return chunks
-
-
-def extract_features(text):
-    inputs = tokenizer(text, return_tensors="pt", padding=True, truncation=True)
-    with torch.no_grad():
-        outputs = solon_model(**inputs)
-    return outputs.last_hidden_state.mean(dim=1).numpy()
-
 
 @app.post(
     "/upload_document",
@@ -486,11 +542,21 @@ async def upload_document(
     db: Session = Depends(database.get_db),
     current_user: dict = Depends(get_current_user)
 ):
+    start_time = time.time()  # Début du chronométrage
+
     check_permission(current_user, "author_post_collection")
 
     # Normalisation du nom du document pour le stockage dans MinIO
     title_document = file.filename.replace(" ", "-")
     bucket_name = f"collection-{collection_id}-{collection_name.replace(' ', '-').replace('_', '-')}"
+
+    # Vérifier si un document avec le même title_document existe déjà dans la même collection
+    existing_document = db.query(models.Document).filter_by(collection_id=collection_id, title_document=title_document).first()
+    if existing_document:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Document with title '{title_document}' already exists in collection '{collection_name}'."
+        )
 
     # Stocker le fichier dans MinIO
     try:
@@ -510,11 +576,9 @@ async def upload_document(
 
     response = minio_client.get_object(bucket_name, title_document)
     file_extension = title_document.split(".")[-1].lower()
-
-    print(file_extension)
+    print (file_extension)
 
     reader = PdfReader(BytesIO(response.read()))
-    print(reader)
 
     text = ""
     for page in reader.pages:
@@ -522,10 +586,10 @@ async def upload_document(
 
     # Diviser le texte en chunks de 500 mots
     chunks = cutting_text(text)
-    print(type(chunks))
 
-    num_chunks = len(chunks)
-    print(num_chunks)
+    # Calcul du nombre de chunks après l'upload, si nécessaire
+    number_of_chunks = len(chunks)
+    print(number_of_chunks)
 
     # Créer l'entrée du document dans la base de données
     new_document = models.Document(
@@ -541,26 +605,148 @@ async def upload_document(
     db.commit()
     db.refresh(new_document)
 
-    features = extract_features(chunks)
-    print(features)
+    # Calcul des embeddings pour chaque chunk et enregistrement dans la base de données
+    for chunk_text in chunks:
+        embedding_solon = solon_model.predict([chunk_text])[0]  # Calculer l'embedding pour chaque chunk
 
-    return {
-        "document_id": new_document.document_id,
-        "collection_id": new_document.collection_id,
-        "collection_name": collection_name,
-        "title": new_document.title,
-        "title_document": new_document.title_document,
-        "minio_link": new_document.minio_link,
-        "date_de_creation": new_document.date_de_creation,
-        "created_at": new_document.created_at,
-        "posted_by": new_document.posted_by,
-        "number_of_chunks": num_chunks
-    }
+        # Créer l'entrée du chunk dans la base de données
+        new_chunk = models.Chunk(
+            document_id=new_document.document_id,
+            chunk_text=chunk_text,
+            taille_chunk=len(chunk_text),
+            embedding_solon=embedding_solon,  # Stocker l'embedding
+            created_at=datetime.now(timezone.utc)
+        )
+        db.add(new_chunk)
+        db.commit()
+
+    end_time = time.time()  # Fin du chronométrage
+    execution_time = end_time - start_time
+
+    print(f"Temps d'exécution : {execution_time:.2f} secondes")
+
+    return schemas.Document(
+        document_id=new_document.document_id,
+        collection_id=new_document.collection_id,
+        collection_name=collection_name,
+        title=new_document.title,
+        title_document=new_document.title_document,
+        minio_link=new_document.minio_link,
+        date_de_creation=new_document.date_de_creation,
+        created_at=new_document.created_at,
+        posted_by=new_document.posted_by,
+        number_of_chunks=number_of_chunks,
+        execution_time=f"{execution_time:.2f} secondes"
+    )
 # ----------------------------------------------------------------------------------------------------------------------------------------------|
 
 
-# Lancer le serveur avec Uvicorn
+
+
+
+# ------------------------------------------------------ Endpoint pour delete un document ------------------------------------------------------|
+def delete_file_in_minio(bucket_name: str, file_name: str):
+    try:
+        minio_client.remove_object(bucket_name, file_name)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete file in MinIO: {str(e)}"
+        )
+
+@app.delete(
+    "/delete_document/{document_id}",
+    summary="Supprimer un document",
+    description="Endpoint qui permet de supprimer un document et ses chunks associés, ainsi que le fichier dans MinIO",
+    tags=["Gestion des documents"]
+)
+async def delete_document(
+    document_id: int,
+    db: Session = Depends(database.get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    # Vérifier les permissions
+    check_permission(current_user, "author_delete_doc")
+
+    # Récupérer le document dans la base de données
+    document = db.query(models.Document).filter(models.Document.document_id == document_id).first()
+
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Document with id {document_id} not found"
+        )
+
+    # Récupérer la collection associée au document
+    collection = db.query(models.Collection).filter(models.Collection.collection_id == document.collection_id).first()
+
+    if not collection:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Collection with id {document.collection_id} not found"
+        )
+
+    # Construire le nom du bucket
+    bucket_name = f"collection-{collection.collection_id}-{collection.name.replace(' ', '-').replace('_', '-')}"
+
+    # Supprimer le fichier dans MinIO
+    delete_file_in_minio(bucket_name, document.title_document)
+
+    # Supprimer les chunks associés
+    db.query(models.Chunk).filter(models.Chunk.document_id == document_id).delete()
+
+    # Supprimer le document dans la base de données
+    db.delete(document)
+    db.commit()
+
+    return {"detail": f"Document with id {document_id} and its chunks have been deleted successfully"}
+# ----------------------------------------------------------------------------------------------------------------------------------------------|
+
+
+
+
+
+# ------------------------------------------------------ Récupération d'un document par son id -------------------------------------------------|
+@app.get(
+    "/documents/{document_id}",
+    response_model=schemas.Document,
+    summary="Récupérer un document par son ID",
+    description="Endpoint pour récupérer un document spécifique en utilisant son ID",
+    tags=["Gestion des documents"]
+)
+async def get_document_by_id(document_id: int, db: Session = Depends(database.get_db)):
+    document = db.query(models.Document).filter(models.Document.document_id == document_id).first()
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Document with ID {document_id} not found."
+        )
+
+    # Calculer le nombre de chunks associés
+    number_of_chunks = db.query(models.Chunk).filter(models.Chunk.document_id == document_id).count()
+
+    # Préparer la réponse
+    return schemas.Document(
+        document_id=document.document_id,
+        collection_id=document.collection_id,
+        collection_name=document.collection.name,  # Assurez-vous de récupérer le nom de la collection
+        title=document.title,
+        title_document=document.title_document,
+        minio_link=document.minio_link,
+        date_de_creation=document.date_de_creation,
+        created_at=document.created_at,
+        posted_by=document.posted_by,
+        number_of_chunks=number_of_chunks
+    )
+# ----------------------------------------------------------------------------------------------------------------------------------------------|
+
+
+
+
+
+
+# ------------------------------------------------------ Lancer le serveur avec Uvicorn --------------------------------------------------------|
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8000)
-
+# ----------------------------------------------------------------------------------------------------------------------------------------------|
