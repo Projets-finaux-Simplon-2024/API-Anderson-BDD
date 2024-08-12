@@ -45,6 +45,8 @@ MINIO_URL = os.getenv("MINIO_URL")
 MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY")
 MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY")
 MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI")
+AWS_ACCESS_KEY_ID=os.getenv("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY=os.getenv("AWS_SECRET_ACCESS_KEY")
 
 # Charger le modèle Solon depuis MLflow
 mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
