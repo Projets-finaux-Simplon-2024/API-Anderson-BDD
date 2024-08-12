@@ -62,8 +62,6 @@ MLFLOW_TRACKING_URI = get_env_variable("MLFLOW_TRACKING_URI")
 AWS_ACCESS_KEY_ID = get_env_variable("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = get_env_variable("AWS_SECRET_ACCESS_KEY")
 
-
-
 # Initialiser le client Minio
 print("\nInitialisation du client Minio...")
 minio_client = Minio(
@@ -82,6 +80,7 @@ try:
     print("Connexion à MinIO réussie.")
 except Exception as e:
     print(f"Erreur de connexion à MinIO: {str(e)}")
+    print("Essayer d'installer le modèle via le script dans le dossier install_models")
     sys.exit(1)
 
 # Charger le modèle Solon depuis MLflow
