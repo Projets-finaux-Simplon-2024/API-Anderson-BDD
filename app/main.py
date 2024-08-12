@@ -48,9 +48,9 @@ def get_env_variable(var_name):
     """Helper function to get environment variable and print validation."""
     value = os.getenv(var_name)
     if value is None:
-        print(f"Erreur : La variable d'environnement {var_name} est manquante.")
+        print(f"\nErreur : La variable d'environnement {var_name} est manquante.")
         sys.exit(1)
-    print(f"Variable d'environnement {var_name} chargée avec succès.")
+    print(f"\nVariable d'environnement {var_name} : {value} chargée avec succès.")
     return value
 
 # Chargement et validation des variables d'environnement
@@ -62,46 +62,58 @@ MLFLOW_TRACKING_URI = get_env_variable("MLFLOW_TRACKING_URI")
 AWS_ACCESS_KEY_ID = get_env_variable("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = get_env_variable("AWS_SECRET_ACCESS_KEY")
 
-# Charger le modèle Solon depuis MLflow
-print("Initialisation de MLflow avec l'URI de suivi...")
-mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-print(f"MLflow URI de suivi défini sur {MLFLOW_TRACKING_URI}.")
 
-# Nom du modèle enregistré
-model_name_solon = "solon-embeddings-large-model"
-
-# Créer une instance de MlflowClient
-print("Création du client MLflow...")
-client = MlflowClient()
-
-# Récupérer toutes les versions du modèle
-print(f"Récupération des versions du modèle {model_name_solon}...")
-model_versions = client.get_latest_versions(model_name_solon)
-
-# Filtrer la dernière version du modèle en fonction de l'ordre de version
-latest_version = max([int(version.version) for version in model_versions])
-print(f"La dernière version du modèle {model_name_solon} est : {latest_version}.")
-
-# Charger le modèle depuis MLflow
-solon_model_uri = f"models:/solon-embeddings-large-model/{latest_version}"
-print(f"Chargement du modèle depuis {solon_model_uri}...")
-solon_model = mlflow.pyfunc.load_model(solon_model_uri)
-print("Modèle chargé avec succès.")
-
-# Charger le tokenizer
-print("Chargement du tokenizer...")
-tokenizer = AutoTokenizer.from_pretrained("OrdalieTech/Solon-embeddings-large-0.1")
-print("Tokenizer chargé avec succès.")
 
 # Initialiser le client Minio
-print("Initialisation du client Minio...")
+print("\nInitialisation du client Minio...")
 minio_client = Minio(
     MINIO_URL,
     access_key=MINIO_ACCESS_KEY,
     secret_key=MINIO_SECRET_KEY,
     secure=False
 )
-print("Client Minio initialisé avec succès.")
+print("\nClient Minio initialisé avec succès.")
+
+try:
+    print("\nTest de la connexion à MinIO...")
+    objects = minio_client.list_objects("mlflow")
+    for obj in objects:
+        print(f"Object: {obj.object_name}")
+    print("Connexion à MinIO réussie.")
+except Exception as e:
+    print(f"Erreur de connexion à MinIO: {str(e)}")
+    sys.exit(1)
+
+# Charger le modèle Solon depuis MLflow
+print("\nInitialisation de MLflow avec l'URI de suivi...")
+mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+print(f"\nMLflow URI de suivi défini sur {MLFLOW_TRACKING_URI}.")
+
+# Nom du modèle enregistré
+model_name_solon = "solon-embeddings-large-model"
+
+# Créer une instance de MlflowClient
+print("\nCréation du client MLflow...")
+client = MlflowClient()
+
+# Récupérer toutes les versions du modèle
+print(f"\nRécupération des versions du modèle {model_name_solon}...")
+model_versions = client.get_latest_versions(model_name_solon)
+
+# Filtrer la dernière version du modèle en fonction de l'ordre de version
+latest_version = max([int(version.version) for version in model_versions])
+print(f"\nLa dernière version du modèle {model_name_solon} est : {latest_version}.")
+
+# Charger le modèle depuis MLflow
+solon_model_uri = f"models:/solon-embeddings-large-model/{latest_version}"
+print(f"\nChargement du modèle depuis {solon_model_uri}...")
+solon_model = mlflow.pyfunc.load_model(solon_model_uri)
+print("\nModèle chargé avec succès.")
+
+# Charger le tokenizer
+print("\nChargement du tokenizer...")
+tokenizer = AutoTokenizer.from_pretrained("OrdalieTech/Solon-embeddings-large-0.1")
+print("\nTokenizer chargé avec succès.")
 # ----------------------------------------------------------------------------------------------------------------------------------------------|
 
 
