@@ -1,13 +1,22 @@
 # ------------------------------------------------------ Imports -------------------------------------------------------------------------------|
-from fastapi import FastAPI, Depends, HTTPException, status, File, UploadFile, Form
-from sqlalchemy.orm import Session
-from sqlalchemy import inspect, select
-from pgvector.sqlalchemy import Vector
-from subprocess import call
+# Standard library imports
+import os
+import io
+import re
+import sys
+import time
 from datetime import datetime, timezone
-from . import models, schemas, database
-from .auth import get_current_user, auth_router, check_permission, get_password_hash
+from subprocess import call
 from typing import List, Optional
+
+# Third-party library imports
+import pandas as pd
+import numpy as np
+import torch
+from sklearn.metrics.pairwise import cosine_similarity
+from sqlalchemy import inspect, select
+from sqlalchemy.orm import Session
+from fastapi import FastAPI, Depends, HTTPException, status, File, UploadFile, Form
 from fastapi.templating import Jinja2Templates
 from minio import Minio
 from minio.commonconfig import REPLACE, CopySource
@@ -18,18 +27,13 @@ from bs4 import BeautifulSoup
 from docx import Document as DocxDocument
 from transformers import AutoTokenizer, AutoModel
 from mlflow.tracking import MlflowClient
-from sklearn.metrics.pairwise import cosine_similarity
-
-
-import pandas as pd
-import numpy as np
-import torch
 import mlflow.pyfunc
 import mlflow
-import os
-import io
-import re
-import time
+from pgvector.sqlalchemy import Vector
+
+# Local application imports
+from . import models, schemas, database
+from .auth import get_current_user, auth_router, check_permission, get_password_hash
 # ----------------------------------------------------------------------------------------------------------------------------------------------|
 
 
