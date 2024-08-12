@@ -40,12 +40,14 @@ import time
 # Charger les variables d'environnement
 load_dotenv()
 
+MAX_CHUNK_LENGTH = 400
 MINIO_URL = os.getenv("MINIO_URL")
 MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY")
 MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY")
+MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI")
 
 # Charger le modèle Solon depuis MLflow
-mlflow.set_tracking_uri("http://localhost:5000")
+mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 
 # Nom du modèle enregistré
 model_name_solon = "solon-embeddings-large-model"
@@ -555,7 +557,7 @@ async def delete_collection(
 
 # ------------------------------------------------------ Endpoint pour upload un document ------------------------------------------------------|
 # Fonction pour découper le texte en chunks de 500 mots
-def cutting_text(text, max_length=500):
+def cutting_text(text, max_length=int(MAX_CHUNK_LENGTH)):
     words = text.split()
     chunks = []
     for i in range(0, len(words), max_length):
@@ -567,7 +569,7 @@ def cutting_text(text, max_length=500):
     "/upload_document",
     response_model=schemas.Document,
     summary="Uploader un document dans une collection (MAX 1Mo) extensions prises en charge : .pdf | .html | .txt | .docx",
-    description="Endpoint qui permet d'uploader un document dans une collection spécifique",
+    description="Endpoint qui permet d'uploader un document dans une collection spécifique en découpant en chunk (par défaut max chunk lenght = 500, modifiable dans les variables d'env).",
     tags=["Gestion des documents"]
 )
 async def upload_document(
@@ -652,7 +654,7 @@ async def upload_document(
 
     # Calcul du nombre de chunks après l'upload
     number_of_chunks = len(chunks)
-    estimated_time = number_of_chunks*2.5
+    estimated_time = number_of_chunks*2.25
     print("-----------------------------------------")
     print(f"Nombre de chunks : {number_of_chunks}")
     print(f"Temps estimé : {estimated_time} secondes")
