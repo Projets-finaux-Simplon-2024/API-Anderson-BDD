@@ -40,8 +40,8 @@ services:
     environment:
       MLFLOW_BACKEND_STORE_URI: "sqlite:///mlflow.db"
       MLFLOW_DEFAULT_ARTIFACT_ROOT: "s3://mlflow/artifacts"
-      AWS_ACCESS_KEY_ID: "minioadmin"
-      AWS_SECRET_ACCESS_KEY: "minioadmin"
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
       MLFLOW_S3_ENDPOINT_URL: "http://minio:9000"
       MLFLOW_HOST: "0.0.0.0"
       MLFLOW_PORT: 5000
@@ -69,12 +69,12 @@ services:
       ALGORITHM: "HS256"
       ACCESS_TOKEN_EXPIRE_MINUTES: "30"
       MINIO_URL: "http://minio:9000"
-      MINIO_ACCESS_KEY: "minioadmin"
-      MINIO_SECRET_KEY: "minioadmin"
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
       MLFLOW_TRACKING_URI: "http://mlflow:5000"
       MLFLOW_DEFAULT_ARTIFACT_ROOT: "s3://mlflow/artifacts"
-      AWS_ACCESS_KEY_ID: "minioadmin"
-      AWS_SECRET_ACCESS_KEY: "minioadmin"
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
       DATABASE_URL: "postgresql://admin:admin@db:5432/anderson"
     ports:
       - "8080:8080"
