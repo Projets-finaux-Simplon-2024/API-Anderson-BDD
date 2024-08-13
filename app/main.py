@@ -44,6 +44,8 @@ from .auth import get_current_user, auth_router, check_permission, get_password_
 # Charger les variables d'environnement
 load_dotenv()
 
+print("\nInitialisation Start...")
+
 def get_env_variable(var_name):
     """Helper function to get environment variable and print validation."""
     value = os.getenv(var_name)
@@ -59,8 +61,10 @@ MINIO_URL = get_env_variable("MINIO_URL")
 MINIO_ACCESS_KEY = get_env_variable("MINIO_ACCESS_KEY")
 MINIO_SECRET_KEY = get_env_variable("MINIO_SECRET_KEY")
 MLFLOW_TRACKING_URI = get_env_variable("MLFLOW_TRACKING_URI")
+MLFLOW_DEFAULT_ARTIFACT_ROOT = get_env_variable("MLFLOW_DEFAULT_ARTIFACT_ROOT")
 AWS_ACCESS_KEY_ID = get_env_variable("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = get_env_variable("AWS_SECRET_ACCESS_KEY")
+MLFLOW_S3_ENDPOINT_URL = get_env_variable("MLFLOW_S3_ENDPOINT_URL")
 
 # Initialiser le client Minio
 print("\nInitialisation du client Minio...")
@@ -70,7 +74,7 @@ minio_client = Minio(
     secret_key=MINIO_SECRET_KEY,
     secure=False
 )
-print("\nClient Minio initialisé avec succès.")
+print("Client Minio initialisé avec succès.")
 
 try:
     print("\nTest de la connexion à MinIO...")
@@ -86,7 +90,16 @@ except Exception as e:
 # Charger le modèle Solon depuis MLflow
 print("\nInitialisation de MLflow avec l'URI de suivi...")
 mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-print(f"\nMLflow URI de suivi défini sur {MLFLOW_TRACKING_URI}.")
+print(f"MLflow URI de suivi défini sur {MLFLOW_TRACKING_URI}.")
+
+# Définissez l'URI de base pour les artefacts stockés dans MinIO
+print("\nInitialisation de l'experiment...")
+mlflow.set_experiment("Solon-embeddings")
+print(f"Experiment configurer sur {MLFLOW_TRACKING_URI}.")
+
+print("\nInitialisation du registry uri...")
+mlflow.set_registry_uri(MLFLOW_DEFAULT_ARTIFACT_ROOT)
+print(f"Registry uri défini sur {MLFLOW_DEFAULT_ARTIFACT_ROOT}.")
 
 # Nom du modèle enregistré
 model_name_solon = "solon-embeddings-large-model"
@@ -107,12 +120,17 @@ print(f"\nLa dernière version du modèle {model_name_solon} est : {latest_versi
 solon_model_uri = f"models:/solon-embeddings-large-model/{latest_version}"
 print(f"\nChargement du modèle depuis {solon_model_uri}...")
 solon_model = mlflow.pyfunc.load_model(solon_model_uri)
-print("\nModèle chargé avec succès.")
+if solon_model:
+    print("Modèle chargé avec succès.")
+else:
+    print("Erreur lors du chargement du modèle.")
+    sys.exit(1)
+
 
 # Charger le tokenizer
 print("\nChargement du tokenizer...")
 tokenizer = AutoTokenizer.from_pretrained("OrdalieTech/Solon-embeddings-large-0.1")
-print("\nTokenizer chargé avec succès.")
+print("Tokenizer chargé avec succès.")
 # ----------------------------------------------------------------------------------------------------------------------------------------------|
 
 
