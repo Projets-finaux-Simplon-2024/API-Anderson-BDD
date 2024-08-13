@@ -97,10 +97,6 @@ print("\nInitialisation de l'experiment...")
 mlflow.set_experiment("Solon-embeddings")
 print(f"Experiment configurer sur {MLFLOW_TRACKING_URI}.")
 
-print("\nInitialisation du registry uri...")
-mlflow.set_registry_uri(MLFLOW_DEFAULT_ARTIFACT_ROOT)
-print(f"Registry uri défini sur {MLFLOW_DEFAULT_ARTIFACT_ROOT}.")
-
 # Nom du modèle enregistré
 model_name_solon = "solon-embeddings-large-model"
 
