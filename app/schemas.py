@@ -120,4 +120,9 @@ class ChunkResult(BaseModel):
 
 class SearchResponse(BaseModel):
     results: List[ChunkResult]
+
+# Schéma de la requête de recherche
+class SearchRequest(BaseModel):
+    query: str
+    top_n: Optional[int] = 5
 # ----------------------------------------------------|
