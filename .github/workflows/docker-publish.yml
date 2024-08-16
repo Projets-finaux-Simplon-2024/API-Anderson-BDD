@@ -28,9 +28,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest==8.3.2  # Installez la même version de pytest
-          pip install anyio==4.4.0 asyncio==0.23.8 mock==3.14.0  # Installez les plugins pytest spécifiques
+          pip install -r requirements-docker.txt
 
       - name: Run tests
         run: pytest
