@@ -17,8 +17,11 @@ def setup_test_database():
     """
     Configure la base de données en mémoire pour les tests en créant les tables et insérant des données par défaut.
     """
+
+    print("\n\n================================= \033[1;33mInitialisation des tests\033[0m ===========================================================")
+
     # Forcer la création des tables avec SQLAlchemy
-    print("\n\n==> \033[1;34mStep 1\033[0m : \033[1;32mCréation de la bdd de test...\033[0m")
+    print("\n==> \033[1;34mStep 1\033[0m : \033[1;32mCréation de la bdd de test...\033[0m")
     Base.metadata.create_all(bind=engine)
     print("\n\033[1;32mCréation réussie...\033[0m")
 
@@ -90,7 +93,7 @@ def initialize_test_services():
     # Mock tokenizer
     mock_tokenizer = MagicMock()
     print("\033[1;32mMock tokenizer initialisé.\033[0m")
-    print("\n==> \033[1;32mFin d'initialisation des services de test...\033[0m")
+    print("\n================================= \033[1;33mInitialisation des tests\033[0m \033[32mPASSED\033[0m ====================================================")
 
     return mock_minio_client, mock_mlflow_client, mock_solon_model, mock_tokenizer
 # ----------------------------------------------------------------------------------------------------------------------------------------------|

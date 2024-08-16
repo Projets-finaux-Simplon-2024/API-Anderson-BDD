@@ -24,3 +24,5 @@ __pycache__/
 .vscode/
 .venv/
 test.db
+tests
+/tests

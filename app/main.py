@@ -517,7 +517,7 @@ async def delete_collection(
 
 
 # ------------------------------------------------------ Endpoint pour upload un document ------------------------------------------------------|
-# Fonction pour découper le texte en chunks de 500 mots
+# Fonction pour découper le texte en chunks de 400 mots
 def cutting_text(text, max_length=400):
     words = text.split()
     chunks = []
