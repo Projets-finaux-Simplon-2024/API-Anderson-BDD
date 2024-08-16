@@ -23,3 +23,6 @@ __pycache__/
 *.env
 .vscode/
 .venv/
+test.db
+tests
+/tests
