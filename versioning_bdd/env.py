@@ -13,7 +13,12 @@ from app.models import User, Role, Collection, Document, Chunk
 target_metadata = Base.metadata
 
 def get_database_url():
+    # Force the use of the in-memory SQLite database when running tests
+    test_mode = os.getenv("TESTING", "False").lower() in ["true", "1"]
+    if test_mode:
+        return "sqlite:///:memory:"
     return os.getenv("DATABASE_URL", config.get_main_option("sqlalchemy.url"))
+
 
 def run_migrations_offline():
     url = get_database_url()

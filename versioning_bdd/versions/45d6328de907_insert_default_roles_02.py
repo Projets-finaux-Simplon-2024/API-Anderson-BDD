@@ -25,6 +25,7 @@ password = "admin"
 hashed_password = pwd_context.hash(password)
 
 def upgrade():
+
     # Insert default roles
     op.execute(
         """
@@ -35,7 +36,7 @@ def upgrade():
         """
     )
 
-    # Insert super user
+    # Insert first admin
     connection = op.get_bind()
     connection.execute(
         sa.text(
@@ -47,14 +48,15 @@ def upgrade():
         {"hashed_password": hashed_password}
     )
 
-    # Ajuster la séquence pour que l'auto-incrémentation continue à partir du bon ID
-    connection.execute(
-        sa.text(
-            """
-            SELECT setval('users_user_id_seq', (SELECT MAX(user_id) FROM users) + 1);
-            """
+    # Ajuster la séquence pour PostgreSQL
+    if connection.dialect.name == 'postgresql':
+        connection.execute(
+            sa.text(
+                """
+                SELECT setval('users_user_id_seq', (SELECT MAX(user_id) FROM users) + 1);
+                """
+            )
         )
-    )
 
 def downgrade():
 
