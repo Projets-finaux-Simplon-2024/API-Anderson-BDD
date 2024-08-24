@@ -18,6 +18,7 @@ from sqlalchemy import inspect, select
 from sqlalchemy.orm import Session
 from fastapi import FastAPI, Depends, HTTPException, status, File, UploadFile, Form
 from fastapi.templating import Jinja2Templates
+from fastapi.middleware.cors import CORSMiddleware
 from minio import Minio
 from minio.commonconfig import REPLACE, CopySource
 from dotenv import load_dotenv
@@ -58,6 +59,15 @@ app = FastAPI(
     description="Cette API permet de d'agréger des documents, de créer des collections pour la circonscription des questions d'un LLM",
     version="1.0.0",
     swagger_ui_parameters={"defaultModelsExpandDepth": -1}
+)
+
+# Configurer CORS pour permettre les requêtes de l'origine de votre application React
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],  # Permet les requêtes de cette origine
+    allow_credentials=True,
+    allow_methods=["*"],  # Permet toutes les méthodes HTTP (GET, POST, PUT, DELETE, etc.)
+    allow_headers=["*"],  # Permet tous les en-têtes
 )
 
 # Monter le routeur d'authentification
