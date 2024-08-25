@@ -126,3 +126,16 @@ class SearchRequest(BaseModel):
     query: str
     top_n: Optional[int] = 5
 # ----------------------------------------------------|
+
+
+
+# ---- Résumer des roles -----------------------------|
+# Schéma pour résumer les informations de rôle
+class RoleSummary(BaseModel):
+    role_id: int
+    role_name: str
+    description: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+# ----------------------------------------------------|

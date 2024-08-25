@@ -175,11 +175,33 @@ async def get_users(
     # Récupérer la liste des utilisateurs
     users = db.query(models.User).all()
     return users
-
 # ----------------------------------------------------------------------------------------------------------------------------------------------|
 
 
+# ------------------------------------------------------ Endpoint pour consulter les résumés de rôles -----------------------------------------|
+@app.get(
+    "/roles",
+    response_model=List[schemas.RoleSummary],  # Vous pouvez documenter ce que vous attendez en sortie
+    summary="Consulter la liste des rôles",
+    description="Endpoint qui permet de consulter uniquement l'ID, le nom et la description des rôles",
+    tags=["Gestion des rôles"]
+)
+async def get_roles_summary(
+    db: Session = Depends(database.get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    # Vérifier si l'utilisateur a les permissions nécessaires
+    check_permission(current_user, "author_get_user")
 
+    # Récupérer les rôles et ne sélectionner que certains champs
+    roles = db.query(
+        models.Role.role_id,
+        models.Role.role_name,
+        models.Role.description
+    ).all()
+
+    return roles
+# ----------------------------------------------------------------------------------------------------------------------------------------------|
 
 
 # ------------------------------------------------------ Endpoint pour consulter un utilisateur par ID -----------------------------------------|
