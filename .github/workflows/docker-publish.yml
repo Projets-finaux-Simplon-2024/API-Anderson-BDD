@@ -47,6 +47,7 @@ jobs:
           AWS_ACCESS_KEY_ID: minioadmin
           AWS_SECRET_ACCESS_KEY: minioadmin
           MLFLOW_S3_ENDPOINT_URL: "http://localhost:9000"
+          REACT_FRONT_URL: "http://localhost:3000"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
