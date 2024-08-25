@@ -38,9 +38,6 @@ from .auth import get_current_user, auth_router, check_permission, get_password_
 from .init_main import initialize_services, mig_tables
 # ----------------------------------------------------------------------------------------------------------------------------------------------|
 
-
-
-
 # ------------------------------------------------------ Configuration des warnings ------------------------------------------------------------|
 import warnings
 
@@ -61,15 +58,6 @@ app = FastAPI(
     swagger_ui_parameters={"defaultModelsExpandDepth": -1}
 )
 
-# Configurer CORS pour permettre les requêtes de l'origine de votre application React
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Permet les requêtes de cette origine
-    allow_credentials=True,
-    allow_methods=["*"],  # Permet toutes les méthodes HTTP (GET, POST, PUT, DELETE, etc.)
-    allow_headers=["*"],  # Permet tous les en-têtes
-)
-
 # Monter le routeur d'authentification
 app.include_router(auth_router, prefix="/auth", tags=["Author"])
 
@@ -88,9 +76,19 @@ latest_version = None
 
 @app.on_event("startup")
 async def startup_event():
-    global minio_client, client, solon_model, tokenizer, engine, latest_version
-    minio_client, client, solon_model, tokenizer, latest_version = initialize_services()
+    global minio_client, client, solon_model, tokenizer, engine, latest_version, REACT_FRONT_URL
+    minio_client, client, solon_model, tokenizer, latest_version, REACT_FRONT_URL = initialize_services()
     engine = mig_tables()
+
+    # Configurer CORS pour permettre les requêtes de l'origine de votre application React
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[REACT_FRONT_URL],  # Permet les requêtes de cette origine
+        allow_credentials=True,
+        allow_methods=["*"],  # Permet toutes les méthodes HTTP (GET, POST, PUT, DELETE, etc.)
+        allow_headers=["*"],  # Permet tous les en-têtes
+    )
+
     print("Initialisation finished... -----------------------------------------------------------------------------------------------------\n")
 # ----------------------------------------------------------------------------------------------------------------------------------------------|
 

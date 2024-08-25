@@ -46,6 +46,7 @@ def initialize_services():
     AWS_ACCESS_KEY_ID = get_env_variable("AWS_ACCESS_KEY_ID")
     AWS_SECRET_ACCESS_KEY = get_env_variable("AWS_SECRET_ACCESS_KEY")
     MLFLOW_S3_ENDPOINT_URL = get_env_variable("MLFLOW_S3_ENDPOINT_URL")
+    REACT_FRONT_URL = get_env_variable("REACT_APP_API_URL")
 
     # Initialiser le client Minio
     print("\nInitialisation du client Minio...")
@@ -108,7 +109,7 @@ def initialize_services():
     tokenizer = AutoTokenizer.from_pretrained("OrdalieTech/Solon-embeddings-large-0.1")
     print("Tokenizer chargé avec succès.")
 
-    return minio_client, client, solon_model, tokenizer, latest_version
+    return minio_client, client, solon_model, tokenizer, latest_version, REACT_FRONT_URL
 # ----------------------------------------------------------------------------------------------------------------------------------------------|
 
 

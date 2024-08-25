@@ -70,7 +70,7 @@ services:
     image: "ghcr.io/projets-finaux-simplon-2024/api-anderson-bdd:main"
     container_name: fastapi_container
     environment:
-      SUPER_USER: superuser
+      SUPER_USER: superuser                                                             # 
       SUPER_PASSWORD: "$2b$12$j9jsBsgf87konm6b5qxnr.OK2xZOLIVPDULPCfkjfML7ZYn7FjT2O"
       SECRET_KEY: "75bdaa1397df51c94112f76b70cd62221b3bd97fd9ae35d07edc5fcd02dff068"
       ALGORITHM: HS256
@@ -84,6 +84,7 @@ services:
       AWS_SECRET_ACCESS_KEY: minioadmin
       MLFLOW_S3_ENDPOINT_URL: "http://minio:9000"
       DATABASE_URL: "postgresql://admin:admin@db:5432/anderson"
+      REACT_FRONT_URL: "http://localhost:3000"
     ports:
       - "8080:8080"
     depends_on:
