@@ -46,7 +46,7 @@ def initialize_services():
     AWS_ACCESS_KEY_ID = get_env_variable("AWS_ACCESS_KEY_ID")
     AWS_SECRET_ACCESS_KEY = get_env_variable("AWS_SECRET_ACCESS_KEY")
     MLFLOW_S3_ENDPOINT_URL = get_env_variable("MLFLOW_S3_ENDPOINT_URL")
-    REACT_FRONT_URL = get_env_variable("REACT_APP_API_URL")
+    REACT_FRONT_URL = get_env_variable("REACT_FRONT_URL")
 
     # Initialiser le client Minio
     print("\nInitialisation du client Minio...")
