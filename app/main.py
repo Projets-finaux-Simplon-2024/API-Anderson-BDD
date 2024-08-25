@@ -35,7 +35,7 @@ from pgvector.sqlalchemy import Vector
 # Local application imports
 from . import models, schemas, database
 from .auth import get_current_user, auth_router, check_permission, get_password_hash
-from .init_main import initialize_services, mig_tables
+from .init_main import initialize_services, mig_tables, get_env_variable
 # ----------------------------------------------------------------------------------------------------------------------------------------------|
 
 # ------------------------------------------------------ Configuration des warnings ------------------------------------------------------------|
@@ -49,20 +49,37 @@ warnings.filterwarnings("ignore", category=DeprecationWarning, module='pydantic'
 # ----------------------------------------------------------------------------------------------------------------------------------------------|
 
 # ------------------------------------------------------ Créer l'application FastAPI avec des métadonnées personnalisées -----------------------|
+print("\n\033[94mInitialisation Start... -----------------------------------------------------------------------------------------------------\033[0m")
 app = FastAPI(
     docs_url="/",
     redoc_url="/docs",
     title="API de Gestion de documents pour Anderson",
-    description="Cette API permet de d'agréger des documents, de créer des collections pour la circonscription des questions d'un LLM",
+    description="Cette API permet d'agréger des documents, de créer des collections pour la circonscription des questions d'un LLM",
     version="1.0.0",
     swagger_ui_parameters={"defaultModelsExpandDepth": -1}
 )
 
+# Configurer CORS pour permettre les requêtes de l'origine de votre application React
+print("\033[94mConfiguration de CORS...\033[0m")
+REACT_FRONT_URL = get_env_variable("REACT_FRONT_URL")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[REACT_FRONT_URL],  # Permet les requêtes de cette origine
+    allow_credentials=True,
+    allow_methods=["*"],  # Permet toutes les méthodes HTTP (GET, POST, PUT, DELETE, etc.)
+    allow_headers=["*"],  # Permet tous les en-têtes
+)
+print(f"\033[92mCORS configuré pour l'origine : {REACT_FRONT_URL}\033[0m")
+
 # Monter le routeur d'authentification
+print("\033[94mMontage du routeur d'authentification...\033[0m")
 app.include_router(auth_router, prefix="/auth", tags=["Author"])
+print("\033[92mRouteur d'authentification monté avec succès.\033[0m")
 
 # Configurer le répertoire des templates
+print("\033[94mConfiguration du répertoire des templates...\033[0m")
 templates = Jinja2Templates(directory="templates")
+print("\033[92mRépertoire des templates configuré.\033[0m")
 # ----------------------------------------------------------------------------------------------------------------------------------------------|
 
 # ------------------------------------------------------ Initialisation ------------------------------------------------------------------------|
@@ -76,20 +93,16 @@ latest_version = None
 
 @app.on_event("startup")
 async def startup_event():
-    global minio_client, client, solon_model, tokenizer, engine, latest_version, REACT_FRONT_URL
-    minio_client, client, solon_model, tokenizer, latest_version, REACT_FRONT_URL = initialize_services()
+    global minio_client, client, solon_model, tokenizer, engine, latest_version
+    print("\n\033[94mDébut de l'initialisation des services...\033[0m")
+    minio_client, client, solon_model, tokenizer, latest_version = initialize_services()
+    print("\033[92mServices initialisés avec succès.\033[0m")
+
+    print("\033[94mVérification des tables de la base de données...\033[0m")
     engine = mig_tables()
+    print("\033[92mVérification des tables terminée.\033[0m")
 
-    # Configurer CORS pour permettre les requêtes de l'origine de votre application React
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=[REACT_FRONT_URL],  # Permet les requêtes de cette origine
-        allow_credentials=True,
-        allow_methods=["*"],  # Permet toutes les méthodes HTTP (GET, POST, PUT, DELETE, etc.)
-        allow_headers=["*"],  # Permet tous les en-têtes
-    )
-
-    print("Initialisation finished... -----------------------------------------------------------------------------------------------------\n")
+    print("\n\033[94mInitialisation finished... -----------------------------------------------------------------------------------------------------\033[0m\n")
 # ----------------------------------------------------------------------------------------------------------------------------------------------|
 
 
