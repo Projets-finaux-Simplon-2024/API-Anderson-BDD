@@ -924,13 +924,9 @@ async def delete_document(
 )
 async def search_similar_chunks(
     request: schemas.SearchRequest,
-    db: Session = Depends(database.get_db),
+    db: Session = Depends(database.get_db)
     current_user: dict = Depends(get_current_user)
 ):
-    
-        # Vérifier les permissions
-    check_permission(current_user, "author_get_user")
-
     # Calculer l'embedding de la requête
     query_embedding = solon_model.predict([request.query])[0]
 
