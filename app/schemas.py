@@ -114,6 +114,11 @@ class ChunkResult(BaseModel):
     document_id: int
     chunk_text: str
     distance: float
+    collection_selectionnee: Optional[str] = "Aucune collection"  # Message par défaut
+
+    class Config:
+        from_attributes = True
+
 
     class Config:
         from_attributes = True
@@ -125,6 +130,7 @@ class SearchResponse(BaseModel):
 class SearchRequest(BaseModel):
     query: str
     top_n: Optional[int] = 5
+    filtre_par_collection: Optional[str] = None  # Nom de la collection, si spécifique
 # ----------------------------------------------------|
 
 
