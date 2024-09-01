@@ -941,13 +941,35 @@ async def search_similar_chunks(
     query_embedding = solon_model.predict([request.query])[0]
 
     # Rechercher les chunks les plus proches dans la base de données
-    stmt = select(
-        models.Chunk.chunk_id,
-        models.Chunk.chunk_text,
-        models.Chunk.document_id,
-        models.Chunk.embedding_solon,
-        models.Chunk.embedding_solon.l2_distance(query_embedding).label("distance")
-    ).order_by("distance").limit(request.top_n)
+    if request.filtre_par_collection and request.filtre_par_collection != "string":
+        # Requête pour un `collection_name` spécifique
+        stmt = select(
+            models.Chunk.chunk_id,
+            models.Chunk.chunk_text,
+            models.Chunk.document_id,
+            models.Collection.name.label("collection_name"),  # Récupérer le nom de la collection
+            models.Chunk.embedding_solon,
+            models.Chunk.embedding_solon.l2_distance(query_embedding).label("distance")
+        ).join(
+            models.Document, models.Chunk.document_id == models.Document.document_id
+        ).join(
+            models.Collection, models.Document.collection_id == models.Collection.collection_id
+        ).where(
+            models.Collection.name == request.filtre_par_collection
+        ).order_by("distance").limit(request.top_n)
+        include_collection_name = True
+    else:
+        # Requête sans `collection_name`, recherchant dans tous les chunks
+        stmt = select(
+            models.Chunk.chunk_id,
+            models.Chunk.chunk_text,
+            models.Chunk.document_id,
+            models.Chunk.embedding_solon,
+            models.Chunk.embedding_solon.l2_distance(query_embedding).label("distance")
+        ).join(
+            models.Document, models.Chunk.document_id == models.Document.document_id
+        ).order_by("distance").limit(request.top_n)
+        include_collection_name = False
 
     similar_chunks = db.execute(stmt).fetchall()
 
@@ -968,6 +990,7 @@ async def search_similar_chunks(
         mlflow.log_param("model_name", "OrdalieTech/Solon-embeddings-large-0.1")
         mlflow.log_param("source", source)
         mlflow.log_param("model_version", f"solon-embeddings-large-model v{latest_version}")
+        mlflow.log_param("collection_choisie", str(include_collection_name))
         mlflow.log_metric("mean_cos_similarity", mean_cos_similarity)
         
         # Enregistrer chaque similarité individuelle
@@ -981,6 +1004,7 @@ async def search_similar_chunks(
             document_id=chunk.document_id,
             chunk_text=chunk.chunk_text,
             distance=chunk.distance,
+            collection_selectionnee=chunk.collection_name if include_collection_name else "Aucune collection"
         )
         for chunk in similar_chunks
     ]
