@@ -573,7 +573,7 @@ def cutting_text(text, max_length=400):
     "/upload_document",
     response_model=schemas.Document,
     summary="Uploader un document dans une collection (MAX 1Mo) extensions prises en charge : .pdf | .html | .txt | .docx",
-    description="Endpoint qui permet d'uploader un document dans une collection spécifique en découpant en chunk (par défaut max chunk length = 500, modifiable dans les variables d'env).",
+    description="Endpoint qui permet d'uploader un document dans une collection spécifique en découpant en chunk (par défaut max chunk lenght = 500, modifiable dans les variables d'env).",
     tags=["Gestion des documents"]
 )
 async def upload_document(
@@ -594,20 +594,10 @@ async def upload_document(
 
     # Vérifier si un document avec le même title_document existe déjà dans la même collection
     existing_document = db.query(models.Document).filter_by(collection_id=collection_id, title_document=title_document).first()
-    if existing_document:
+    if (existing_document):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Document with title '{title_document}' already exists in collection '{collection_name}'."
-        )
-
-    # Vérification de l'extension du fichier
-    allowed_extensions = {"pdf", "txt", "html", "docx"}
-    file_extension = title_document.split(".")[-1].lower()
-
-    if file_extension not in allowed_extensions:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unsupported file format '{file_extension}'. Allowed formats are: {', '.join(allowed_extensions)}."
         )
 
     # Lire le contenu du fichier
@@ -638,6 +628,9 @@ async def upload_document(
         )
 
     response = minio_client.get_object(bucket_name, title_document)
+    file_extension = title_document.split(".")[-1].lower()
+    print("\n-----------------------------------------")
+    print(f"Extension du fichier upload : {file_extension}")
 
     text = ""
     if file_extension == "pdf":
@@ -659,12 +652,13 @@ async def upload_document(
         for paragraph in doc.paragraphs:
             text += paragraph.text + ' '
 
+
     # Diviser le texte en chunks de 500 mots
     chunks = cutting_text(text)
 
     # Calcul du nombre de chunks après l'upload
     number_of_chunks = len(chunks)
-    estimated_time = number_of_chunks * 2.25
+    estimated_time = number_of_chunks*2.25
     print("-----------------------------------------")
     print(f"Nombre de chunks : {number_of_chunks}")
     print(f"Temps estimé : {estimated_time} secondes")
@@ -930,46 +924,19 @@ async def delete_document(
 )
 async def search_similar_chunks(
     request: schemas.SearchRequest,
-    db: Session = Depends(database.get_db),
-    current_user: dict = Depends(get_current_user)
+    db: Session = Depends(database.get_db)
 ):
-    
-    # Vérifier les permissions
-    check_permission(current_user, "author_get_user")
-
     # Calculer l'embedding de la requête
     query_embedding = solon_model.predict([request.query])[0]
 
     # Rechercher les chunks les plus proches dans la base de données
-    if request.filtre_par_collection and request.filtre_par_collection != "string":
-        # Requête pour un `collection_name` spécifique
-        stmt = select(
-            models.Chunk.chunk_id,
-            models.Chunk.chunk_text,
-            models.Chunk.document_id,
-            models.Collection.name.label("collection_name"),  # Récupérer le nom de la collection
-            models.Chunk.embedding_solon,
-            models.Chunk.embedding_solon.l2_distance(query_embedding).label("distance")
-        ).join(
-            models.Document, models.Chunk.document_id == models.Document.document_id
-        ).join(
-            models.Collection, models.Document.collection_id == models.Collection.collection_id
-        ).where(
-            models.Collection.name == request.filtre_par_collection
-        ).order_by("distance").limit(request.top_n)
-        include_collection_name = True
-    else:
-        # Requête sans `collection_name`, recherchant dans tous les chunks
-        stmt = select(
-            models.Chunk.chunk_id,
-            models.Chunk.chunk_text,
-            models.Chunk.document_id,
-            models.Chunk.embedding_solon,
-            models.Chunk.embedding_solon.l2_distance(query_embedding).label("distance")
-        ).join(
-            models.Document, models.Chunk.document_id == models.Document.document_id
-        ).order_by("distance").limit(request.top_n)
-        include_collection_name = False
+    stmt = select(
+        models.Chunk.chunk_id,
+        models.Chunk.chunk_text,
+        models.Chunk.document_id,
+        models.Chunk.embedding_solon,
+        models.Chunk.embedding_solon.l2_distance(query_embedding).label("distance")
+    ).order_by("distance").limit(request.top_n)
 
     similar_chunks = db.execute(stmt).fetchall()
 
@@ -990,7 +957,6 @@ async def search_similar_chunks(
         mlflow.log_param("model_name", "OrdalieTech/Solon-embeddings-large-0.1")
         mlflow.log_param("source", source)
         mlflow.log_param("model_version", f"solon-embeddings-large-model v{latest_version}")
-        mlflow.log_param("collection_choisie", str(include_collection_name))
         mlflow.log_metric("mean_cos_similarity", mean_cos_similarity)
         
         # Enregistrer chaque similarité individuelle
@@ -1004,7 +970,6 @@ async def search_similar_chunks(
             document_id=chunk.document_id,
             chunk_text=chunk.chunk_text,
             distance=chunk.distance,
-            collection_selectionnee=chunk.collection_name if include_collection_name else "Aucune collection"
         )
         for chunk in similar_chunks
     ]
