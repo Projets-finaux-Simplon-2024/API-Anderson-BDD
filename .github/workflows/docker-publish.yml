@@ -31,7 +31,10 @@ jobs:
           pip install -r requirements-docker.txt
 
       - name: Run tests
-        run: pytest
+        run: |
+          coverage run -m pytest
+          coverage report  # Afficher le rapport de couverture dans le terminal
+          coverage xml  # Générer un rapport XML pour une analyse dans CI/CD
         env:
           TESTING: true
           SUPER_USER: superuser
