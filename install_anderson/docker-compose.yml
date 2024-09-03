@@ -17,8 +17,9 @@ services:
       - db-data:/var/lib/postgresql/data
     command: ["postgres", "-c", "shared_preload_libraries=vector"]
     networks:
-      my_network:
+      network:
         ipv4_address: 172.16.238.2
+      monitoring_network:
 
   # Service MinIO pour le stockage des fichiers et des artefacts MLflow
   minio:
@@ -34,8 +35,9 @@ services:
     volumes:
       - minio-data:/data
     networks:
-      my_network:
+      network:
         ipv4_address: 172.16.238.3
+      monitoring_network:
 
   # Service MLflow pour le suivi des modèles
   mlflow:
@@ -62,15 +64,16 @@ services:
       --host 0.0.0.0 
       --port 5000
     networks:
-      my_network:
+      network:
         ipv4_address: 172.16.238.4
+      monitoring_network:
 
   # Service FastAPI
   fastapi:
     image: "ghcr.io/projets-finaux-simplon-2024/api-anderson-bdd:main"
     container_name: fastapi_container
     environment:
-      SUPER_USER: superuser                                                             # 
+      SUPER_USER: superuser
       SUPER_PASSWORD: "$2b$12$j9jsBsgf87konm6b5qxnr.OK2xZOLIVPDULPCfkjfML7ZYn7FjT2O"
       SECRET_KEY: "75bdaa1397df51c94112f76b70cd62221b3bd97fd9ae35d07edc5fcd02dff068"
       ALGORITHM: HS256
@@ -92,8 +95,9 @@ services:
       - minio
       - mlflow
     networks:
-      my_network:
+      network:
         ipv4_address: 172.16.238.5
+      monitoring_network:
 
 volumes:
   db-data:
@@ -104,8 +108,10 @@ volumes:
     name: mlflow_volume
 
 networks:
-  my_network:
+  network:
     driver: bridge
     ipam:
       config:
         - subnet: 172.16.238.0/24
+  monitoring_network:
+    external: true
