@@ -31,6 +31,7 @@ from mlflow.tracking import MlflowClient
 import mlflow.pyfunc
 import mlflow
 from pgvector.sqlalchemy import Vector
+from prometheus_fastapi_instrumentator import Instrumentator
 
 # Local application imports
 from . import models, schemas, database
@@ -71,6 +72,11 @@ app.add_middleware(
 )
 print(f"\033[92mCORS configuré pour l'origine : {REACT_FRONT_URL}\033[0m")
 
+# Configuration de l'instrumentation Prometheus pour FastAPI
+print("\033[94mConfiguration de Instrumentator pour Prometheus...\033[0m")
+Instrumentator().instrument(app).expose(app, include_in_schema=False)
+print("\033[92mInstrumentator pour Prometheus configuré...\033[0m")
+
 # Monter le routeur d'authentification
 print("\033[94mMontage du routeur d'authentification...\033[0m")
 app.include_router(auth_router, prefix="/auth", tags=["Author"])
@@ -106,8 +112,14 @@ async def startup_event():
 # ----------------------------------------------------------------------------------------------------------------------------------------------|
 
 
+# ------------------------------------------------------ Endpoint pour le monitoring -----------------------------------------------------------|
+from fastapi import Response
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 
-
+@app.get("/metrics", tags=["Monitoring"], summary="Métriques de l'application", description="Exposition des métriques Prometheus pour le monitoring.")
+async def custom_metrics():
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+# ----------------------------------------------------------------------------------------------------------------------------------------------|
 
 
 # ------------------------------------------------------ Endpoint pour créer un utilisateur ----------------------------------------------------|
@@ -560,6 +572,14 @@ async def delete_collection(
 
 
 # ------------------------------------------------------ Endpoint pour upload un document ------------------------------------------------------|
+from prometheus_client import Counter, Histogram
+
+# Créer des métriques
+documents_uploaded = Counter('documents_uploaded_total', 'Total number of documents uploaded')
+chunks_created = Counter('chunks_created_total', 'Total number of chunks created')
+upload_file_size = Histogram('upload_file_size_bytes', 'Size of uploaded files')
+upload_processing_time = Histogram('upload_processing_time_seconds', 'Time spent processing document upload')
+
 # Fonction pour découper le texte en chunks de 400 mots
 def cutting_text(text, max_length=400):
     words = text.split()
@@ -584,7 +604,8 @@ async def upload_document(
     db: Session = Depends(database.get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    start_time = time.time()  # Début du chronométrage
+    # Démarrer le chronométrage manuellement
+    start_time = time.time()
 
     check_permission(current_user, "author_post_collection")
 
@@ -612,6 +633,9 @@ async def upload_document(
 
     # Lire le contenu du fichier
     file_content = await file.read()
+
+    # Enregistrer la taille du fichier dans la métrique
+    upload_file_size.observe(len(file_content))
 
     # Vérifier si la taille du fichier dépasse 1 Mo
     file_size = len(file_content)
@@ -670,6 +694,9 @@ async def upload_document(
     print(f"Temps estimé : {estimated_time} secondes")
     print("-----------------------------------------")
 
+    # Incrémenter le compteur pour les documents uploadés
+    documents_uploaded.inc()
+
     # Créer l'entrée du document dans la base de données
     new_document = models.Document(
         collection_id=collection_id,
@@ -700,8 +727,16 @@ async def upload_document(
         db.add(new_chunk)
         db.commit()
 
-    end_time = time.time()  # Fin du chronométrage
+        # Incrémenter le compteur pour chaque chunk créé
+        chunks_created.inc()
+
+    # Fin du chronométrage
+    end_time = time.time()
     execution_time = end_time - start_time
+
+    # Enregistrer le temps d'exécution dans la métrique
+    upload_processing_time.observe(execution_time)
+
     print("-----------------------------------------")
     print(f"Temps d'exécution : {execution_time:.2f} secondes")
     print("-----------------------------------------\n")
