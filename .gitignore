@@ -31,3 +31,5 @@ htmlcov/
 .ipynb_checkpoints/
 
 install_models/models
+assets
+report.html
