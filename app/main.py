@@ -37,6 +37,11 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from . import models, schemas, database
 from .auth import get_current_user, auth_router, check_permission, get_password_hash
 from .init_main import initialize_services, mig_tables, get_env_variable
+
+# Ajouter l'import pour FastAPI-Limiter
+from fastapi_limiter import FastAPILimiter
+from fastapi_limiter.depends import RateLimiter
+import redis.asyncio as aioredis
 # ----------------------------------------------------------------------------------------------------------------------------------------------|
 
 # ------------------------------------------------------ Configuration des warnings ------------------------------------------------------------|
@@ -102,6 +107,8 @@ async def startup_event():
     global minio_client, client, solon_model, tokenizer, engine, latest_version
     print("\n\033[94mDébut de l'initialisation des services...\033[0m")
     minio_client, client, solon_model, tokenizer, latest_version = initialize_services()
+    redis_conn = await aioredis.from_url("redis://localhost")
+    await FastAPILimiter.init(redis_conn)  # Init limiter with Redis
     print("\033[92mServices initialisés avec succès.\033[0m")
 
     print("\033[94mVérification des tables de la base de données...\033[0m")
@@ -162,7 +169,6 @@ async def create_user(
     db.refresh(new_user)
 
     return new_user
-
 # ----------------------------------------------------------------------------------------------------------------------------------------------|
 
 
@@ -175,7 +181,8 @@ async def create_user(
     response_model=List[schemas.User],
     summary="Consulter la liste des utilisateurs",
     description="Endpoint qui permet de consulter la liste des utilisateurs",
-    tags=["Gestion des utilisateurs"]
+    tags=["Gestion des utilisateurs"],
+    dependencies=[Depends(RateLimiter(times=5, seconds=60))]  # Limite à 5 requêtes par minute
 )
 async def get_users(
     db: Session = Depends(database.get_db),
@@ -190,7 +197,7 @@ async def get_users(
 # ----------------------------------------------------------------------------------------------------------------------------------------------|
 
 
-# ------------------------------------------------------ Endpoint pour consulter les résumés de rôles -----------------------------------------|
+# ------------------------------------------------------ Endpoint pour consulter les résumés de rôles ------------------------------------------|
 @app.get(
     "/roles",
     response_model=List[schemas.RoleSummary],  # Vous pouvez documenter ce que vous attendez en sortie
