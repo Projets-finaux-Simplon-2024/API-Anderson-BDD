@@ -1,6 +1,8 @@
 <div align="center">
 
-# 🤖 Anderson — API de recherche sémantique pour RAG
+<img src="icons8-néo-480.png" alt="Logo Anderson" width="140">
+
+# Anderson — API de recherche sémantique pour RAG
 
 ![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-API-009688?logo=fastapi&logoColor=white)
