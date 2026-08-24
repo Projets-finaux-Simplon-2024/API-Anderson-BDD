@@ -37,6 +37,7 @@ Le projet complet intègre également une authentification JWT, une gestion des 
 - [Tests automatisés](#tests)
 - [Sécurité et configuration](#securite)
 - [Démonstration en ligne](#demonstration)
+- [Différences entre les deux versions](#difference)
 
 <a id="fonctionnalites"></a>
 ## ✨ Fonctionnalités
@@ -363,6 +364,7 @@ Cette version permet :
 - d’envoyer une question ;
 - de récupérer un prompt enrichi prêt à être transmis à un LLM.
 
+<a id="difference"></a>
 ## 📌 Différences entre les deux versions
 
 | Projet GitHub complet | Démo Hugging Face Spaces |
@@ -376,6 +378,3 @@ Cette version permet :
 | Monitoring et tests complets | Démonstration fonctionnelle simplifiée |
 | Recherche des chunks similaires | Génération directe d’un prompt enrichi |
 
-
-Créer l'image en local : 
-docker run -d --name fastapi_container -e SUPER_USER=superuser -e SUPER_PASSWORD='$2b$12$j9jsBsgf87konm6b5qxnr.OK2xZOLIVPDULPCfkjfML7ZYn7FjT2O' -e SECRET_KEY=75bdaa1397df51c94112f76b70cd62221b3bd97fd9ae35d07edc5fcd02dff068 -e ALGORITHM=HS256 -e ACCESS_TOKEN_EXPIRE_MINUTES=30 -e MINIO_URL=172.18.0.3:9000 -e MINIO_ACCESS_KEY=minioadmin -e MINIO_SECRET_KEY=minioadmin -e MLFLOW_TRACKING_URI=http://172.18.0.4:5000 -e MLFLOW_DEFAULT_ARTIFACT_ROOT=s3://mlflow/artifacts -e AWS_ACCESS_KEY_ID=minioadmin -e AWS_SECRET_ACCESS_KEY=minioadmin -e MLFLOW_S3_ENDPOINT_URL=http://172.18.0.3:9000 -e DATABASE_URL=postgresql://admin:admin@172.18.0.2/anderson -p 8080:8080 --network container_anderson_back_office_default mon-image
